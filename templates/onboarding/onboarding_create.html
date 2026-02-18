@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Opret onboarding - Kentaur Onboarding{% endblock %}
+
+{% block content %}
+<div class="mt-14 max-w-2xl">
+    <div class="mb-6">
+        <a href="{% url 'onboarding:list' %}" class="text-sm text-gray-500 hover:text-gray-700 mb-1 inline-block">&larr; Tilbage til onboardings</a>
+        <h1 class="text-2xl font-bold text-gray-900">Opret ny onboarding</h1>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+        <div class="bg-white shadow rounded-lg p-6 space-y-4">
+            <div>
+                <label for="{{ form.template.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">Skabelon</label>
+                {{ form.template }}
+                {% if form.template.errors %}<p class="text-red-600 text-sm mt-1">{{ form.template.errors.0 }}</p>{% endif %}
+            </div>
+            <div>
+                <label for="{{ form.new_employee_name.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">Navn på ny medarbejder</label>
+                {{ form.new_employee_name }}
+                {% if form.new_employee_name.errors %}<p class="text-red-600 text-sm mt-1">{{ form.new_employee_name.errors.0 }}</p>{% endif %}
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="{{ form.new_employee_email.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    {{ form.new_employee_email }}
+                </div>
+                <div>
+                    <label for="{{ form.start_date.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">Startdato</label>
+                    {{ form.start_date }}
+                    {% if form.start_date.errors %}<p class="text-red-600 text-sm mt-1">{{ form.start_date.errors.0 }}</p>{% endif %}
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="{{ form.new_employee_department.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">Afdeling</label>
+                    {{ form.new_employee_department }}
+                </div>
+                <div>
+                    <label for="{{ form.new_employee_position.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">Stilling</label>
+                    {{ form.new_employee_position }}
+                </div>
+            </div>
+            <div>
+                <label for="{{ form.notes.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">Noter</label>
+                {{ form.notes }}
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="{% url 'onboarding:list' %}"
+               class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
+                Annuller
+            </a>
+            <button type="submit"
+                    class="bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition">
+                Opret onboarding
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

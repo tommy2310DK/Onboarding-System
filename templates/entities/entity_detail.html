@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}{{ entity.name }} - Kentaur Onboarding{% endblock %}
+
+{% block content %}
+<div class="mt-14">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <a href="{% url 'entities:list' %}" class="text-sm text-gray-500 hover:text-gray-700 mb-1 inline-block">&larr; Tilbage til enheder</a>
+            <h1 class="text-2xl font-bold text-gray-900">{{ entity.name }}</h1>
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'entities:edit' entity.pk %}"
+               class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition">
+                Rediger
+            </a>
+            <a href="{% url 'entities:delete' entity.pk %}"
+               class="bg-red-50 text-red-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-100 transition">
+                Slet
+            </a>
+        </div>
+    </div>
+
+    <div class="bg-white shadow rounded-lg p-6 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="text-sm font-medium text-gray-500">Beskrivelse</label>
+                <p class="text-gray-900 mt-1">{{ entity.description|default:"Ingen beskrivelse" }}</p>
+            </div>
+            <div>
+                <label class="text-sm font-medium text-gray-500">Kategori</label>
+                <p class="text-gray-900 mt-1">
+                    {% if entity.category %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                        {{ entity.category }}
+                    </span>
+                    {% else %}
+                    Ingen kategori
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white shadow rounded-lg">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">Brugerdefinerede felter</h2>
+        </div>
+        {% if entity.custom_fields.all %}
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Feltnavn</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Påkrævet</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Standardværdi</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                {% for field in entity.custom_fields.all %}
+                <tr>
+                    <td class="px-6 py-4 text-sm font-medium text-gray-900">{{ field.name }}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">{{ field.get_field_type_display }}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        {% if field.is_required %}
+                        <span class="text-green-600">Ja</span>
+                        {% else %}
+                        <span class="text-gray-400">Nej</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500">{{ field.default_value|default:"—" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="p-6 text-center text-gray-500 text-sm">
+            Ingen brugerdefinerede felter.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

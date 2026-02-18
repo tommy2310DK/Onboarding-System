@@ -1,0 +1,26 @@
+/* Kentaur Onboarding System - Custom Styles */
+
+/* Smooth transitions for HTMX swaps */
+.htmx-settling {
+    opacity: 0.8;
+}
+
+.htmx-swapping {
+    opacity: 0.5;
+    transition: opacity 0.15s ease-out;
+}
+
+/* Badge animation */
+@keyframes badge-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.badge-pulse {
+    animation: badge-pulse 0.3s ease-in-out;
+}
+
+/* Progress bar animation */
+.progress-bar {
+    transition: width 0.5s ease-in-out;
+}

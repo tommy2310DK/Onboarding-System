@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Skabeloner - Kentaur Onboarding{% endblock %}
+
+{% block content %}
+<div class="mt-14">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">Onboarding-skabeloner</h1>
+        <a href="{% url 'templates_mgmt:create' %}"
+           class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition">
+            + Opret skabelon
+        </a>
+    </div>
+
+    {% if templates %}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for template in templates %}
+        <a href="{% url 'templates_mgmt:detail' template.pk %}"
+           class="bg-white shadow rounded-lg p-6 hover:shadow-md transition block">
+            <div class="flex items-start justify-between">
+                <h3 class="text-lg font-semibold text-gray-900">{{ template.name }}</h3>
+                {% if template.is_active %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Aktiv</span>
+                {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">Inaktiv</span>
+                {% endif %}
+            </div>
+            {% if template.description %}
+            <p class="text-sm text-gray-500 mt-2 line-clamp-2">{{ template.description }}</p>
+            {% endif %}
+            <div class="mt-4 text-sm text-gray-400">
+                {{ template.template_entities.count }} enheder
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white shadow rounded-lg p-8 text-center">
+        <p class="text-gray-500">Ingen skabeloner oprettet endnu.</p>
+        <a href="{% url 'templates_mgmt:create' %}" class="text-indigo-600 hover:text-indigo-900 text-sm mt-2 inline-block">Opret den første skabelon</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,41 @@
+<nav class="bg-indigo-700 text-white shadow-lg fixed top-0 left-0 right-0 z-50">
+    <div class="px-6 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <a href="{% url 'core:dashboard' %}" class="text-xl font-bold tracking-tight">
+                Kentaur Onboarding
+            </a>
+        </div>
+        <div class="flex items-center gap-4">
+            <!-- Notification bell -->
+            {% if current_user %}
+            <div class="relative" id="notification-bell">
+                <a href="{% url 'notifications:list' %}" class="text-white hover:text-indigo-200 relative">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                    </svg>
+                    <span id="notification-badge"
+                          hx-get="{% url 'notifications:unread_count' %}"
+                          hx-trigger="every 30s"
+                          hx-swap="innerHTML">
+                    </span>
+                </a>
+            </div>
+            {% endif %}
+
+            <!-- User picker -->
+            <form method="post" action="{% url 'core:switch_user' %}" class="flex items-center gap-2">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <select name="user_id" onchange="this.form.submit()"
+                        class="bg-indigo-600 text-white border border-indigo-500 rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <option value="">-- Vælg bruger --</option>
+                    {% for user in all_users %}
+                    <option value="{{ user.id }}" {% if current_user and current_user.id == user.id %}selected{% endif %}>
+                        {{ user.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+    </div>
+</nav>

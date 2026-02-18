@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Onboardings - Kentaur Onboarding{% endblock %}
+
+{% block content %}
+<div class="mt-14">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">Onboarding-processer</h1>
+        <a href="{% url 'onboarding:create' %}"
+           class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition">
+            + Opret onboarding
+        </a>
+    </div>
+
+    <div class="flex gap-2 mb-4">
+        <a href="{% url 'onboarding:list' %}"
+           class="px-3 py-1.5 rounded-lg text-sm font-medium {% if not status_filter %}bg-indigo-100 text-indigo-700{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
+            Alle
+        </a>
+        <a href="{% url 'onboarding:list' %}?status=active"
+           class="px-3 py-1.5 rounded-lg text-sm font-medium {% if status_filter == 'active' %}bg-indigo-100 text-indigo-700{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
+            Aktive
+        </a>
+        <a href="{% url 'onboarding:list' %}?status=completed"
+           class="px-3 py-1.5 rounded-lg text-sm font-medium {% if status_filter == 'completed' %}bg-indigo-100 text-indigo-700{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
+            Færdige
+        </a>
+    </div>
+
+    {% if processes %}
+    <div class="space-y-4">
+        {% for process in processes %}
+        <a href="{% url 'onboarding:detail' process.pk %}" class="bg-white shadow rounded-lg p-6 block hover:shadow-md transition">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900">{{ process.new_employee_name }}</h3>
+                    <p class="text-sm text-gray-500">
+                        {{ process.new_employee_position }}{% if process.new_employee_position and process.new_employee_department %} &middot; {% endif %}{{ process.new_employee_department }}
+                    </p>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm text-gray-500">Startdato</div>
+                    <div class="font-medium text-gray-900">{{ process.start_date|date:"d. M Y" }}</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex-1 bg-gray-200 rounded-full h-2">
+                    <div class="bg-indigo-600 h-2 rounded-full progress-bar" style="width: {{ process.progress_percentage }}%"></div>
+                </div>
+                <span class="text-sm font-medium text-gray-600">{{ process.progress_percentage }}%</span>
+                <span class="text-xs text-gray-400">{{ process.completed_tasks }}/{{ process.total_tasks }}</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white shadow rounded-lg p-8 text-center">
+        <p class="text-gray-500">Ingen onboarding-processer fundet.</p>
+        <a href="{% url 'onboarding:create' %}" class="text-indigo-600 hover:text-indigo-900 text-sm mt-2 inline-block">Opret den første onboarding</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

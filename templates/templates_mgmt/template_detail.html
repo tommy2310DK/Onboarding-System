@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}{{ template.name }} - Kentaur Onboarding{% endblock %}
+
+{% block extra_head %}
+<style>
+    .drag-handle { cursor: grab; }
+    .drag-handle:active { cursor: grabbing; }
+    .sortable-ghost { opacity: 0.4; background-color: #eef2ff; }
+    .sortable-chosen { background-color: #f5f7ff; }
+    .reorder-saved {
+        animation: flash-green 0.6s ease-out;
+    }
+    @keyframes flash-green {
+        0% { background-color: #d1fae5; }
+        100% { background-color: transparent; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mt-14">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <a href="{% url 'templates_mgmt:list' %}" class="text-sm text-gray-500 hover:text-gray-700 mb-1 inline-block">&larr; Tilbage til skabeloner</a>
+            <h1 class="text-2xl font-bold text-gray-900">{{ template.name }}</h1>
+            {% if template.description %}
+            <p class="text-gray-500 mt-1">{{ template.description }}</p>
+            {% endif %}
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'templates_mgmt:add_entity' template.pk %}"
+               class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition">
+                + Tilføj enhed
+            </a>
+            <form method="post" action="{% url 'templates_mgmt:duplicate' template.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit"
+                        class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
+                    Kopier
+                </button>
+            </form>
+            <a href="{% url 'templates_mgmt:edit' template.pk %}"
+               class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
+                Rediger
+            </a>
+            <a href="{% url 'templates_mgmt:delete' template.pk %}"
+               class="bg-red-50 text-red-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-100 transition">
+                Slet
+            </a>
+        </div>
+    </div>
+
+    {% if template_entities %}
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase w-10"></th>
+                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase w-10">#</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Enhed</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Deadline (dage før)</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ansvarlig</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Afhængigheder</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notif.</th>
+                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Handlinger</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200" id="sortable-entities">
+                {% for te in template_entities %}
+                <tr class="hover:bg-gray-50 entity-row" data-id="{{ te.pk }}">
+                    <td class="px-3 py-4 drag-handle text-gray-400 hover:text-gray-600">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"></path>
+                        </svg>
+                    </td>
+                    <td class="px-3 py-4 text-sm text-gray-400 sort-number">{{ te.sort_order }}</td>
+                    <td class="px-4 py-4">
+                        <div class="text-sm font-medium text-gray-900">{{ te.entity.name }}</div>
+                        {% if te.entity.category %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 mt-1">{{ te.entity.category }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-4 text-sm text-gray-500">
+                        {% if te.days_before_start is not None %}
+                        {{ te.days_before_start }} dage
+                        {% else %}
+                        —
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-4 text-sm text-gray-500">
+                        {{ te.default_assignee|default:"Ikke tildelt" }}
+                    </td>
+                    <td class="px-4 py-4 text-sm">
+                        {% for dep in te.dependencies.all %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 mr-1 mb-1">
+                            {{ dep.entity.name }}
+                        </span>
+                        {% empty %}
+                        <span class="text-gray-400">Ingen</span>
+                        {% endfor %}
+                    </td>
+                    <td class="px-4 py-4 text-sm text-gray-500">
+                        {{ te.notification_rules.count }}
+                    </td>
+                    <td class="px-4 py-4 text-right text-sm space-x-2">
+                        <a href="{% url 'templates_mgmt:edit_entity' template.pk te.pk %}" class="text-indigo-600 hover:text-indigo-900">Rediger</a>
+                        <a href="{% url 'templates_mgmt:dependencies' template.pk te.pk %}" class="text-indigo-600 hover:text-indigo-900">Afhæng.</a>
+                        <a href="{% url 'templates_mgmt:notifications' template.pk te.pk %}" class="text-indigo-600 hover:text-indigo-900">Notif.</a>
+                        <form method="post" action="{% url 'templates_mgmt:remove_entity' template.pk te.pk %}" class="inline">
+                            {% csrf_token %}
+                            <button type="submit" class="text-red-600 hover:text-red-900" onclick="return confirm('Fjern denne enhed fra skabelonen?')">Fjern</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="text-xs text-gray-400 mt-2">Træk i håndtaget til venstre for at ændre rækkefølgen.</p>
+    {% else %}
+    <div class="bg-white shadow rounded-lg p-8 text-center">
+        <p class="text-gray-500 mb-2">Ingen enheder tilføjet til denne skabelon endnu.</p>
+        <a href="{% url 'templates_mgmt:add_entity' template.pk %}" class="text-indigo-600 hover:text-indigo-900 text-sm">Tilføj den første enhed</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+<script>
+(function() {
+    var el = document.getElementById('sortable-entities');
+    if (!el) return;
+
+    var reorderUrl = "{% url 'templates_mgmt:reorder' template.pk %}";
+    var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (!csrfToken) {
+        // Grab from the hx-headers on body
+        var body = document.querySelector('body');
+        var headers = body.getAttribute('hx-headers');
+        if (headers) {
+            csrfToken = JSON.parse(headers)['X-CSRFToken'];
+        }
+    } else {
+        csrfToken = csrfToken.value;
+    }
+
+    Sortable.create(el, {
+        handle: '.drag-handle',
+        animation: 200,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        onEnd: function() {
+            var rows = el.querySelectorAll('tr.entity-row');
+            var order = [];
+            rows.forEach(function(row, index) {
+                order.push(parseInt(row.dataset.id));
+                // Update the visible sort number
+                var numEl = row.querySelector('.sort-number');
+                if (numEl) numEl.textContent = index;
+            });
+
+            // Save to server
+            fetch(reorderUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({ order: order })
+            }).then(function(resp) {
+                if (resp.ok) {
+                    // Flash green on all rows
+                    rows.forEach(function(row) {
+                        row.classList.add('reorder-saved');
+                        setTimeout(function() { row.classList.remove('reorder-saved'); }, 700);
+                    });
+                }
+            });
+        }
+    });
+})();
+</script>
+{% endblock %}

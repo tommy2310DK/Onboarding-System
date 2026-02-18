@@ -1,0 +1,25 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Kentaur Onboarding{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <link rel="stylesheet" href="{% static 'css/main.css' %}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-50 min-h-screen" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    {% include "partials/_navbar.html" %}
+    <div class="flex">
+        {% include "partials/_sidebar.html" %}
+        <main class="flex-1 p-6 ml-64">
+            {% include "partials/_messages.html" %}
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    <script src="{% static 'js/app.js' %}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

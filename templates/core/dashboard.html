@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Kentaur Onboarding{% endblock %}
+
+{% block content %}
+<div class="mt-14">
+    <h1 class="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
+
+    {% if not current_user %}
+    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+        <svg class="w-12 h-12 text-yellow-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+        </svg>
+        <h2 class="text-lg font-semibold text-yellow-800 mb-1">Ingen bruger valgt</h2>
+        <p class="text-yellow-700">Vælg en bruger i menuen øverst til højre for at komme i gang.</p>
+    </div>
+    {% else %}
+    <!-- Stats cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-sm text-gray-500 mb-1">Aktive onboardings</div>
+                    <div class="text-3xl font-bold text-indigo-600">{{ active_processes_count|default:"0" }}</div>
+                </div>
+                <div class="bg-indigo-100 rounded-full p-3">
+                    <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-sm text-gray-500 mb-1">Mine opgaver</div>
+                    <div class="text-3xl font-bold text-green-600">{{ my_tasks_count|default:"0" }}</div>
+                </div>
+                <div class="bg-green-100 rounded-full p-3">
+                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-sm text-gray-500 mb-1">Forsinkede opgaver</div>
+                    <div class="text-3xl font-bold {% if overdue_tasks_count %}text-red-600{% else %}text-gray-400{% endif %}">{{ overdue_tasks_count|default:"0" }}</div>
+                </div>
+                <div class="{% if overdue_tasks_count %}bg-red-100{% else %}bg-gray-100{% endif %} rounded-full p-3">
+                    <svg class="w-6 h-6 {% if overdue_tasks_count %}text-red-600{% else %}text-gray-400{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- My tasks -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-gray-900">Mine opgaver</h2>
+            </div>
+            <div class="divide-y divide-gray-100">
+                {% for task in my_tasks %}
+                <a href="{% url 'onboarding:task_detail' task.onboarding.pk task.pk %}"
+                   class="flex items-center justify-between px-6 py-3 hover:bg-gray-50 transition">
+                    <div class="min-w-0 flex-1">
+                        <div class="text-sm font-medium text-gray-900 truncate">{{ task.name }}</div>
+                        <div class="text-xs text-gray-500">{{ task.onboarding.new_employee_name }}</div>
+                    </div>
+                    <div class="flex items-center gap-3 ml-4 flex-shrink-0">
+                        {% if task.status == 'ready' %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Klar</span>
+                        {% elif task.status == 'in_progress' %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">I gang</span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">Afventer</span>
+                        {% endif %}
+                        {% if task.deadline %}
+                        <span class="text-xs {% if task.is_overdue %}text-red-600 font-medium{% else %}text-gray-400{% endif %}">
+                            {{ task.deadline|date:"d/m" }}
+                        </span>
+                        {% endif %}
+                    </div>
+                </a>
+                {% empty %}
+                <div class="px-6 py-8 text-center text-gray-500 text-sm">
+                    Ingen opgaver tildelt til dig lige nu.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Active onboardings -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-gray-900">Aktive onboardings</h2>
+                <a href="{% url 'onboarding:list' %}?status=active" class="text-sm text-indigo-600 hover:text-indigo-900">Se alle</a>
+            </div>
+            <div class="divide-y divide-gray-100">
+                {% for process in active_processes %}
+                <a href="{% url 'onboarding:detail' process.pk %}"
+                   class="block px-6 py-4 hover:bg-gray-50 transition">
+                    <div class="flex items-center justify-between mb-2">
+                        <div>
+                            <span class="text-sm font-medium text-gray-900">{{ process.new_employee_name }}</span>
+                            <span class="text-xs text-gray-400 ml-2">Start: {{ process.start_date|date:"d/m/Y" }}</span>
+                        </div>
+                        <span class="text-sm font-medium text-gray-600">{{ process.progress_percentage }}%</span>
+                    </div>
+                    <div class="bg-gray-200 rounded-full h-1.5">
+                        <div class="bg-indigo-600 h-1.5 rounded-full progress-bar" style="width: {{ process.progress_percentage }}%"></div>
+                    </div>
+                </a>
+                {% empty %}
+                <div class="px-6 py-8 text-center text-gray-500 text-sm">
+                    Ingen aktive onboardings.
+                    <a href="{% url 'onboarding:create' %}" class="text-indigo-600 hover:text-indigo-900 block mt-1">Opret en ny</a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

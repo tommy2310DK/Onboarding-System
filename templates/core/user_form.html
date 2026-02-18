@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_create %}Opret bruger{% else %}Rediger {{ user_obj.name }}{% endif %} - Kentaur Onboarding{% endblock %}
+
+{% block content %}
+<div class="mt-14 max-w-2xl">
+    <div class="mb-6">
+        <a href="{% url 'core:user_list' %}" class="text-sm text-gray-500 hover:text-gray-700 mb-1 inline-block">&larr; Tilbage til brugere</a>
+        <h1 class="text-2xl font-bold text-gray-900">
+            {% if is_create %}Opret bruger{% else %}Rediger {{ user_obj.name }}{% endif %}
+        </h1>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+        <div class="bg-white shadow rounded-lg p-6 space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="{{ form.name.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">Navn</label>
+                    {{ form.name }}
+                    {% if form.name.errors %}<p class="text-red-600 text-sm mt-1">{{ form.name.errors.0 }}</p>{% endif %}
+                </div>
+                <div>
+                    <label for="{{ form.email.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    {{ form.email }}
+                    {% if form.email.errors %}<p class="text-red-600 text-sm mt-1">{{ form.email.errors.0 }}</p>{% endif %}
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="{{ form.department.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">Afdeling</label>
+                    {{ form.department }}
+                </div>
+                <div>
+                    <label for="{{ form.title.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">Stilling</label>
+                    {{ form.title }}
+                </div>
+            </div>
+            <div>
+                <label for="{{ form.phone.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
+                {{ form.phone }}
+            </div>
+            <div class="flex items-center gap-2 pt-2">
+                {{ form.is_active }}
+                <label for="{{ form.is_active.id_for_label }}" class="text-sm font-medium text-gray-700">Aktiv bruger</label>
+            </div>
+        </div>
+
+        {% if not is_create and user_obj.azure_ad_object_id %}
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-1">
+                <svg class="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                </svg>
+                <span class="text-sm font-medium text-blue-800">Azure AD forbundet</span>
+            </div>
+            <p class="text-xs text-blue-600">Object ID: {{ user_obj.azure_ad_object_id }}</p>
+        </div>
+        {% endif %}
+
+        <div class="flex justify-end gap-3">
+            <a href="{% url 'core:user_list' %}"
+               class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
+                Annuller
+            </a>
+            <button type="submit"
+                    class="bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition">
+                {% if is_create %}Opret bruger{% else %}Gem ændringer{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
