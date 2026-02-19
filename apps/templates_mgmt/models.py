@@ -53,6 +53,13 @@ class TemplateEntity(models.Model):
         return f"{self.template.name} → {self.entity.name}"
 
 
+class TriggerStatus(models.TextChoices):
+    READY = 'ready', 'Klar'
+    IN_PROGRESS = 'in_progress', 'I gang'
+    COMPLETED = 'completed', 'Færdig'
+    SKIPPED = 'skipped', 'Sprunget over'
+
+
 class TemplateEntityNotificationRule(models.Model):
     template_entity = models.ForeignKey(
         TemplateEntity, on_delete=models.CASCADE,
@@ -60,16 +67,29 @@ class TemplateEntityNotificationRule(models.Model):
     )
     notify_user = models.ForeignKey(
         'core.SystemUser', on_delete=models.CASCADE,
+        null=True, blank=True,
         related_name='template_notification_rules',
         verbose_name='Bruger'
+    )
+    notify_assignee = models.BooleanField(
+        default=False,
+        verbose_name='Notificer ansvarlig',
+        help_text='Send notifikation til den ansvarlige for opgaven',
+    )
+    trigger_status = models.CharField(
+        max_length=20,
+        choices=TriggerStatus.choices,
+        default=TriggerStatus.COMPLETED,
+        verbose_name='Ved status',
+        help_text='Send notifikation når opgaven skifter til denne status',
     )
     send_email = models.BooleanField(default=True, verbose_name='Send email')
     send_in_app = models.BooleanField(default=True, verbose_name='In-app notifikation')
 
     class Meta:
-        unique_together = ['template_entity', 'notify_user']
         verbose_name = 'Notifikationsregel'
         verbose_name_plural = 'Notifikationsregler'
 
     def __str__(self):
-        return f"Notificer {self.notify_user} når {self.template_entity} er færdig"
+        target = self.notify_user or 'Ansvarlig'
+        return f"Notificer {target} når {self.template_entity} bliver {self.get_trigger_status_display()}"

@@ -165,10 +165,21 @@ class TaskNotificationRule(models.Model):
         OnboardingTask, on_delete=models.CASCADE, related_name='notification_rules'
     )
     notify_user = models.ForeignKey(
-        'core.SystemUser', on_delete=models.CASCADE
+        'core.SystemUser', on_delete=models.CASCADE,
+        null=True, blank=True,
+    )
+    notify_assignee = models.BooleanField(default=False, verbose_name='Notificer ansvarlig')
+    trigger_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('ready', 'Klar'), ('in_progress', 'I gang'),
+            ('completed', 'Færdig'), ('skipped', 'Sprunget over'),
+        ],
+        default='completed',
+        verbose_name='Ved status',
     )
     send_email = models.BooleanField(default=True)
     send_in_app = models.BooleanField(default=True)
 
     class Meta:
-        unique_together = ['task', 'notify_user']
+        pass

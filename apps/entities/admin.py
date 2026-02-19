@@ -1,5 +1,11 @@
 from django.contrib import admin
-from .models import Entity, CustomFieldDefinition
+from .models import Category, Entity, CustomFieldDefinition
+
+
+@admin.register(Category)
+class CategoryAdmin(admin.ModelAdmin):
+    list_display = ['name', 'created_at']
+    search_fields = ['name']
 
 
 class CustomFieldInline(admin.TabularInline):

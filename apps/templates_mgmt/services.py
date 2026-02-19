@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 
 from django.db import transaction
@@ -72,10 +73,24 @@ def create_onboarding_from_template(template, new_employee_name, new_employee_em
 
         # Create field values
         for field_def in te.entity.custom_fields.all():
+            if field_def.field_type == 'todolist':
+                # default_value stores newline-separated items; convert to JSON
+                if field_def.default_value.strip():
+                    lines = [l.strip() for l in field_def.default_value.split('\n') if l.strip()]
+                    initial_text = json.dumps(
+                        [{'text': t, 'done': False} for t in lines],
+                        ensure_ascii=False,
+                    )
+                else:
+                    initial_text = '[]'
+            elif field_def.field_type == 'text':
+                initial_text = field_def.default_value
+            else:
+                initial_text = ''
             OnboardingTaskFieldValue.objects.create(
                 task=task,
                 field_definition=field_def,
-                value_text=field_def.default_value if field_def.field_type == 'text' else '',
+                value_text=initial_text,
                 value_number=None,
                 value_checkbox=False,
             )
@@ -85,6 +100,8 @@ def create_onboarding_from_template(template, new_employee_name, new_employee_em
             TaskNotificationRule.objects.create(
                 task=task,
                 notify_user=rule.notify_user,
+                notify_assignee=rule.notify_assignee,
+                trigger_status=rule.trigger_status,
                 send_email=rule.send_email,
                 send_in_app=rule.send_in_app,
             )
@@ -97,10 +114,13 @@ def create_onboarding_from_template(template, new_employee_name, new_employee_em
                 task.dependencies.add(te_to_task[dep_te.id])
 
     # Resolve initial statuses: tasks with no dependencies become READY
+    from apps.onboarding.services import _fire_notification_rules
+
     for task in process.tasks.all():
         if not task.dependencies.exists():
             task.status = TaskStatus.READY
             task.save(update_fields=['status'])
+            _fire_notification_rules(task, 'ready')
 
     return process
 
@@ -134,6 +154,8 @@ def duplicate_template(template):
             TemplateEntityNotificationRule.objects.create(
                 template_entity=new_te,
                 notify_user=rule.notify_user,
+                notify_assignee=rule.notify_assignee,
+                trigger_status=rule.trigger_status,
                 send_email=rule.send_email,
                 send_in_app=rule.send_in_app,
             )

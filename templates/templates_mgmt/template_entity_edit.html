@@ -14,7 +14,13 @@
         <div class="bg-white shadow rounded-lg p-6 space-y-4">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Enhed</label>
-                <p class="text-gray-900">{{ te.entity.name }}</p>
+                <div class="flex items-center gap-3">
+                    <p class="text-gray-900">{{ te.entity.name }}</p>
+                    <a href="{% url 'entities:edit' te.entity.pk %}"
+                       class="text-indigo-600 hover:text-indigo-900 text-xs font-medium">
+                        Rediger enhed &amp; felter &rarr;
+                    </a>
+                </div>
             </div>
             <div>
                 <label for="{{ form.days_before_start.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">Dage før startdato</label>
@@ -29,6 +35,24 @@
                 {{ form.sort_order }}
             </div>
         </div>
+
+        {% if te.entity.custom_fields.all %}
+        <div class="bg-white shadow rounded-lg p-6">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-lg font-semibold text-gray-900">Brugerdefinerede felter</h2>
+                <a href="{% url 'entities:edit' te.entity.pk %}"
+                   class="text-indigo-600 hover:text-indigo-900 text-xs font-medium">Rediger felter &rarr;</a>
+            </div>
+            <div class="space-y-2">
+                {% for field in te.entity.custom_fields.all %}
+                <div class="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0">
+                    <span class="text-sm text-gray-700">{{ field.name }}</span>
+                    <span class="text-xs text-gray-400">{{ field.get_field_type_display }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
 
         <div class="flex justify-end gap-3">
             <a href="{% url 'templates_mgmt:detail' template.pk %}"

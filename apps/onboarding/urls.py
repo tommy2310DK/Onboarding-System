@@ -13,4 +13,6 @@ urlpatterns = [
     path('<int:pk>/tasks/<int:task_pk>/skip/', views.TaskSkipView.as_view(), name='task_skip'),
     path('<int:pk>/tasks/<int:task_pk>/start/', views.TaskStartView.as_view(), name='task_start'),
     path('<int:pk>/tasks/<int:task_pk>/edit/', views.TaskEditView.as_view(), name='task_edit'),
+    path('<int:pk>/tasks/<int:task_pk>/change-status/', views.TaskChangeStatusView.as_view(), name='task_change_status'),
+    path('<int:pk>/tasks/<int:task_pk>/todo/<int:fv_pk>/', views.TaskTodoToggleView.as_view(), name='task_todo_toggle'),
 ]

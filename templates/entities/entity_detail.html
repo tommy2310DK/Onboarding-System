@@ -53,6 +53,7 @@
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Feltnavn</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Påkrævet</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Overblik</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Standardværdi</th>
                 </tr>
             </thead>
@@ -68,7 +69,26 @@
                         <span class="text-gray-400">Nej</span>
                         {% endif %}
                     </td>
-                    <td class="px-6 py-4 text-sm text-gray-500">{{ field.default_value|default:"—" }}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        {% if field.show_on_overview %}
+                        <span class="text-green-600">Ja</span>
+                        {% else %}
+                        <span class="text-gray-400">Nej</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        {% if field.field_type == 'todolist' and field.default_value %}
+                        <ul class="list-disc list-inside">
+                            {% for item in field.default_value.splitlines %}
+                            {% if item.strip %}
+                            <li class="text-xs">{{ item }}</li>
+                            {% endif %}
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        {{ field.default_value|default:"\u2014" }}
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>

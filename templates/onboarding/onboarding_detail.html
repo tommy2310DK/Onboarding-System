@@ -39,9 +39,61 @@
     </div>
     {% endif %}
 
-    <!-- Task list -->
+    <!-- Details toggle + Task list -->
+    <div class="flex items-center justify-end mb-3">
+        <label for="details-toggle" class="flex items-center gap-2 cursor-pointer select-none">
+            <span class="text-sm font-medium text-gray-600">Detaljer</span>
+            <div class="relative">
+                <input type="checkbox" id="details-toggle" class="sr-only peer">
+                <div class="w-9 h-5 bg-gray-300 rounded-full peer-checked:bg-indigo-600 transition-colors"></div>
+                <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow peer-checked:translate-x-4 transition-transform"></div>
+            </div>
+        </label>
+    </div>
+
     <div id="task-list">
         {% include "onboarding/partials/_task_list.html" %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    var toggle = document.getElementById('details-toggle');
+    var taskList = document.getElementById('task-list');
+    if (!toggle || !taskList) return;
+
+    function applyToggle() {
+        var details = taskList.querySelectorAll('.task-overview-fields');
+        details.forEach(function(el) {
+            if (toggle.checked) {
+                el.classList.remove('hidden');
+            } else {
+                el.classList.add('hidden');
+            }
+        });
+    }
+
+    // Persist toggle state in sessionStorage
+    var saved = sessionStorage.getItem('onboarding-details-toggle');
+    if (saved === 'true') {
+        toggle.checked = true;
+    }
+
+    toggle.addEventListener('change', function() {
+        sessionStorage.setItem('onboarding-details-toggle', toggle.checked);
+        applyToggle();
+    });
+
+    applyToggle();
+
+    // Re-apply after HTMX swaps (task complete/skip/start buttons)
+    document.body.addEventListener('htmx:afterSwap', function(e) {
+        if (e.detail.target && e.detail.target.id === 'task-list') {
+            applyToggle();
+        }
+    });
+})();
+</script>
 {% endblock %}

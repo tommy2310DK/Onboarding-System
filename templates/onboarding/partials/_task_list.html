@@ -1,11 +1,46 @@
+{% load onboarding_tags %}
 <div class="bg-white shadow rounded-lg overflow-hidden">
     <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
             <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Opgave</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ansvarlig</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Deadline</th>
+                {% with base_url="?sort=" opposite_asc="desc" opposite_desc="asc" %}
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    <a href="?sort=status&dir={% if sort_by == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                       class="flex items-center gap-1 hover:text-gray-900 transition">
+                        Status
+                        {% if sort_by == 'status' %}
+                        <svg class="w-3 h-3 text-indigo-600 {% if sort_dir == 'desc' %}rotate-180{% endif %}" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                        {% endif %}
+                    </a>
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    <a href="?sort=name&dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                       class="flex items-center gap-1 hover:text-gray-900 transition">
+                        Opgave
+                        {% if sort_by == 'name' %}
+                        <svg class="w-3 h-3 text-indigo-600 {% if sort_dir == 'desc' %}rotate-180{% endif %}" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                        {% endif %}
+                    </a>
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    <a href="?sort=assignee&dir={% if sort_by == 'assignee' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                       class="flex items-center gap-1 hover:text-gray-900 transition">
+                        Ansvarlig
+                        {% if sort_by == 'assignee' %}
+                        <svg class="w-3 h-3 text-indigo-600 {% if sort_dir == 'desc' %}rotate-180{% endif %}" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                        {% endif %}
+                    </a>
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    <a href="?sort=deadline&dir={% if sort_by == 'deadline' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                       class="flex items-center gap-1 hover:text-gray-900 transition">
+                        Deadline
+                        {% if sort_by == 'deadline' %}
+                        <svg class="w-3 h-3 text-indigo-600 {% if sort_dir == 'desc' %}rotate-180{% endif %}" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                        {% endif %}
+                    </a>
+                </th>
+                {% endwith %}
                 <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Handlinger</th>
             </tr>
         </thead>
@@ -86,6 +121,47 @@
                     {% endif %}
                 </td>
             </tr>
+            {% if task.overview_fields %}
+            <tr class="task-overview-fields hidden">
+                <td colspan="5" class="px-6 py-3 bg-gray-50/50">
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-2">
+                        {% for fv in task.overview_fields %}
+                        <div>
+                            <span class="text-xs font-medium text-gray-500">{{ fv.field_definition.name }}</span>
+                            {% if fv.field_definition.field_type == 'checkbox' %}
+                            <p class="text-sm text-gray-900">
+                                {% if fv.value_checkbox %}
+                                <svg class="w-4 h-4 inline text-green-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Ja
+                                {% else %}
+                                <svg class="w-4 h-4 inline text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg> Nej
+                                {% endif %}
+                            </p>
+                            {% elif fv.field_definition.field_type == 'number' %}
+                            <p class="text-sm text-gray-900">{{ fv.value_number|default:"—" }}</p>
+                            {% elif fv.field_definition.field_type == 'todolist' %}
+                            <div class="text-sm text-gray-900">
+                                {% for item in fv.value_text|parse_todo_json %}
+                                <span class="inline-flex items-center gap-1 mr-2">
+                                    {% if item.done %}
+                                    <svg class="w-3 h-3 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                                    {% else %}
+                                    <svg class="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 100-12 6 6 0 000 12z" clip-rule="evenodd"></path></svg>
+                                    {% endif %}
+                                    <span class="{% if item.done %}line-through text-gray-400{% endif %}">{{ item.text }}</span>
+                                </span>
+                                {% empty %}
+                                <span class="text-gray-400">—</span>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <p class="text-sm text-gray-900">{{ fv.value_text|default:"—" }}</p>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </td>
+            </tr>
+            {% endif %}
             {% endfor %}
         </tbody>
     </table>

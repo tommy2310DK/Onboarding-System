@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 
 from apps.core.models import SystemUser
-from apps.entities.models import Entity, CustomFieldDefinition, FieldType
+from apps.entities.models import Category, Entity, CustomFieldDefinition, FieldType
 from apps.templates_mgmt.models import (
     OnboardingTemplate, TemplateEntity, TemplateEntityNotificationRule,
 )
@@ -31,22 +31,28 @@ class Command(BaseCommand):
             if created:
                 self.stdout.write(f'  Created user: {name}')
 
+        # Create categories
+        cat_it, _ = Category.objects.get_or_create(name='IT')
+        cat_hr, _ = Category.objects.get_or_create(name='HR')
+        cat_adgang, _ = Category.objects.get_or_create(name='Adgang')
+        cat_kontor, _ = Category.objects.get_or_create(name='Kontor')
+
         # Create entities
         entities = {}
 
         # IT entities
         e, _ = Entity.objects.get_or_create(
             name='Bestil laptop',
-            defaults={'description': 'Bestil og klargør laptop til den nye medarbejder.', 'category': 'IT'}
+            defaults={'description': 'Bestil og klargør laptop til den nye medarbejder.', 'category': cat_it}
         )
         entities['laptop'] = e
         CustomFieldDefinition.objects.get_or_create(
             entity=e, name='Laptop model',
-            defaults={'field_type': FieldType.TEXT, 'default_value': 'Dell Latitude 5540', 'sort_order': 0}
+            defaults={'field_type': FieldType.TEXT, 'default_value': 'Dell Latitude 5540', 'sort_order': 0, 'show_on_overview': True}
         )
         CustomFieldDefinition.objects.get_or_create(
             entity=e, name='RAM (GB)',
-            defaults={'field_type': FieldType.NUMBER, 'default_value': '16', 'sort_order': 1}
+            defaults={'field_type': FieldType.NUMBER, 'default_value': '16', 'sort_order': 1, 'show_on_overview': True}
         )
         CustomFieldDefinition.objects.get_or_create(
             entity=e, name='Admin-rettigheder',
@@ -55,33 +61,33 @@ class Command(BaseCommand):
 
         e, _ = Entity.objects.get_or_create(
             name='Opret AD-konto',
-            defaults={'description': 'Opret Active Directory brugerkonto.', 'category': 'IT'}
+            defaults={'description': 'Opret Active Directory brugerkonto.', 'category': cat_it}
         )
         entities['ad'] = e
         CustomFieldDefinition.objects.get_or_create(
             entity=e, name='Brugernavn',
-            defaults={'field_type': FieldType.TEXT, 'is_required': True, 'sort_order': 0}
+            defaults={'field_type': FieldType.TEXT, 'is_required': True, 'sort_order': 0, 'show_on_overview': True}
         )
 
         e, _ = Entity.objects.get_or_create(
             name='Opret email-konto',
-            defaults={'description': 'Opret Microsoft 365 email konto.', 'category': 'IT'}
+            defaults={'description': 'Opret Microsoft 365 email konto.', 'category': cat_it}
         )
         entities['email'] = e
         CustomFieldDefinition.objects.get_or_create(
             entity=e, name='Email-adresse',
-            defaults={'field_type': FieldType.TEXT, 'is_required': True, 'sort_order': 0}
+            defaults={'field_type': FieldType.TEXT, 'is_required': True, 'sort_order': 0, 'show_on_overview': True}
         )
 
         e, _ = Entity.objects.get_or_create(
             name='Opsæt VPN-adgang',
-            defaults={'description': 'Konfigurer VPN-adgang til firmanetværket.', 'category': 'IT'}
+            defaults={'description': 'Konfigurer VPN-adgang til firmanetværket.', 'category': cat_it}
         )
         entities['vpn'] = e
 
         e, _ = Entity.objects.get_or_create(
             name='Installer software',
-            defaults={'description': 'Installer nødvendige softwarepakker på laptop.', 'category': 'IT'}
+            defaults={'description': 'Installer nødvendige softwarepakker på laptop.', 'category': cat_it}
         )
         entities['software'] = e
         CustomFieldDefinition.objects.get_or_create(
@@ -95,7 +101,7 @@ class Command(BaseCommand):
 
         e, _ = Entity.objects.get_or_create(
             name='Tildel software-licenser',
-            defaults={'description': 'Tildel licenser til nødvendige softwareprodukter.', 'category': 'IT'}
+            defaults={'description': 'Tildel licenser til nødvendige softwareprodukter.', 'category': cat_it}
         )
         entities['licenser'] = e
         CustomFieldDefinition.objects.get_or_create(
@@ -106,28 +112,28 @@ class Command(BaseCommand):
         # HR entities
         e, _ = Entity.objects.get_or_create(
             name='Kontrakt underskrevet',
-            defaults={'description': 'Sikre at ansættelseskontrakt er underskrevet og arkiveret.', 'category': 'HR'}
+            defaults={'description': 'Sikre at ansættelseskontrakt er underskrevet og arkiveret.', 'category': cat_hr}
         )
         entities['kontrakt'] = e
 
         e, _ = Entity.objects.get_or_create(
             name='Bestil adgangskort',
-            defaults={'description': 'Bestil adgangskort til bygningen.', 'category': 'Adgang'}
+            defaults={'description': 'Bestil adgangskort til bygningen.', 'category': cat_adgang}
         )
         entities['adgangskort'] = e
         CustomFieldDefinition.objects.get_or_create(
             entity=e, name='Kortnummer',
-            defaults={'field_type': FieldType.TEXT, 'sort_order': 0}
+            defaults={'field_type': FieldType.TEXT, 'sort_order': 0, 'show_on_overview': True}
         )
 
         e, _ = Entity.objects.get_or_create(
             name='Klargør arbejdsplads',
-            defaults={'description': 'Sæt skrivebord, stol, skærme og headset op.', 'category': 'Kontor'}
+            defaults={'description': 'Sæt skrivebord, stol, skærme og headset op.', 'category': cat_kontor}
         )
         entities['arbejdsplads'] = e
         CustomFieldDefinition.objects.get_or_create(
             entity=e, name='Pladsering / kontor',
-            defaults={'field_type': FieldType.TEXT, 'sort_order': 0}
+            defaults={'field_type': FieldType.TEXT, 'sort_order': 0, 'show_on_overview': True}
         )
         CustomFieldDefinition.objects.get_or_create(
             entity=e, name='Antal skærme',
@@ -136,19 +142,19 @@ class Command(BaseCommand):
 
         e, _ = Entity.objects.get_or_create(
             name='Velkomstmøde med leder',
-            defaults={'description': 'Planlæg introsamtale med nærmeste leder.', 'category': 'HR'}
+            defaults={'description': 'Planlæg introsamtale med nærmeste leder.', 'category': cat_hr}
         )
         entities['velkomst'] = e
 
         e, _ = Entity.objects.get_or_create(
             name='Introduktion til teamet',
-            defaults={'description': 'Præsenter ny medarbejder for teamet og vis rundt.', 'category': 'HR'}
+            defaults={'description': 'Præsenter ny medarbejder for teamet og vis rundt.', 'category': cat_hr}
         )
         entities['intro'] = e
 
         e, _ = Entity.objects.get_or_create(
             name='Opret i lønsystem',
-            defaults={'description': 'Registrer medarbejder i lønsystemet.', 'category': 'HR'}
+            defaults={'description': 'Registrer medarbejder i lønsystemet.', 'category': cat_hr}
         )
         entities['lon'] = e
 
@@ -166,7 +172,6 @@ class Command(BaseCommand):
         if created:
             self.stdout.write('  Creating template entities...')
 
-            # Add entities to template with order, deadlines, and assignees
             te_kontrakt = TemplateEntity.objects.create(
                 template=tmpl, entity=entities['kontrakt'],
                 days_before_start=14, default_assignee=users['maria'], sort_order=1,
@@ -216,43 +221,28 @@ class Command(BaseCommand):
                 days_before_start=0, default_assignee=users['thomas'], sort_order=12,
             )
 
-            # Set up dependencies
-            # AD-konto depends on kontrakt
             te_ad.dependencies.add(te_kontrakt)
-            # Email depends on AD-konto
             te_email.dependencies.add(te_ad)
-            # Løn depends on kontrakt
             te_lon.dependencies.add(te_kontrakt)
-            # Licenser depends on AD-konto
             te_licenser.dependencies.add(te_ad)
-            # Software depends on laptop + licenser
             te_software.dependencies.add(te_laptop, te_licenser)
-            # VPN depends on AD-konto
             te_vpn.dependencies.add(te_ad)
-            # Arbejdsplads depends on laptop
             te_arbejdsplads.dependencies.add(te_laptop)
-            # Velkomstmøde depends on everything being almost ready
             te_velkomst.dependencies.add(te_email, te_adgangskort)
-            # Intro depends on velkomstmøde
             te_intro.dependencies.add(te_velkomst)
 
-            # Set up notification rules
-            # Notify IT lead (Anders) when laptop is ready
             TemplateEntityNotificationRule.objects.create(
                 template_entity=te_laptop, notify_user=users['anders'],
                 send_email=True, send_in_app=True,
             )
-            # Notify HR (Maria) when AD-konto is created
             TemplateEntityNotificationRule.objects.create(
                 template_entity=te_ad, notify_user=users['maria'],
                 send_email=True, send_in_app=True,
             )
-            # Notify management when onboarding is nearly done
             TemplateEntityNotificationRule.objects.create(
                 template_entity=te_velkomst, notify_user=users['thomas'],
                 send_email=True, send_in_app=True,
             )
-            # Notify Peter when licenser er klar (so he can install software)
             TemplateEntityNotificationRule.objects.create(
                 template_entity=te_licenser, notify_user=users['peter'],
                 send_email=True, send_in_app=True,

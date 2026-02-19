@@ -10,15 +10,11 @@ def complete_task(task, completed_by):
     task.completed_by = completed_by
     task.save(update_fields=['status', 'completed_at', 'completed_by'])
 
-    # Send notifications for this task completion
-    _send_completion_notifications(task)
+    # Fire notification rules for "completed" trigger
+    _fire_notification_rules(task, 'completed')
 
     # Cascade: unlock dependent tasks
     _cascade_status_updates(task)
-
-    # Check if entire onboarding is complete
-    if task.onboarding.is_complete:
-        _send_onboarding_complete_notification(task.onboarding)
 
 
 def skip_task(task, skipped_by):
@@ -28,11 +24,11 @@ def skip_task(task, skipped_by):
     task.completed_by = skipped_by
     task.save(update_fields=['status', 'completed_at', 'completed_by'])
 
+    # Fire notification rules for "skipped" trigger
+    _fire_notification_rules(task, 'skipped')
+
     # Cascade: unlock dependent tasks
     _cascade_status_updates(task)
-
-    if task.onboarding.is_complete:
-        _send_onboarding_complete_notification(task.onboarding)
 
 
 def start_task(task):
@@ -41,6 +37,48 @@ def start_task(task):
         task.status = TaskStatus.IN_PROGRESS
         task.save(update_fields=['status'])
 
+        # Fire notification rules for "in_progress" trigger
+        _fire_notification_rules(task, 'in_progress')
+
+
+def change_task_status(task, new_status, user=None):
+    """Change a task to an arbitrary valid status, delegating to the right handler."""
+    if new_status == task.status:
+        return  # No change needed
+
+    old_status = task.status
+
+    if new_status == TaskStatus.COMPLETED:
+        complete_task(task, user)
+    elif new_status == TaskStatus.SKIPPED:
+        skip_task(task, user)
+    else:
+        # For reversing from completed/skipped, clear completion metadata
+        if old_status in [TaskStatus.COMPLETED, TaskStatus.SKIPPED]:
+            task.completed_at = None
+            task.completed_by = None
+
+        task.status = new_status
+        task.save(update_fields=['status', 'completed_at', 'completed_by'])
+
+        # Fire notification rules for the new status
+        _fire_notification_rules(task, new_status)
+
+        # If we moved FROM a "done" status to a non-done status, dependents
+        # that relied on this task being done must revert to PENDING.
+        if old_status in [TaskStatus.COMPLETED, TaskStatus.SKIPPED]:
+            _cascade_revert_dependents(task)
+
+
+def _cascade_revert_dependents(reverted_task):
+    """When a task is un-completed, revert its dependents back to PENDING
+    unless they are already completed or skipped themselves."""
+    done_statuses = [TaskStatus.COMPLETED, TaskStatus.SKIPPED]
+    for dependent in reverted_task.dependents.exclude(status__in=done_statuses):
+        if dependent.is_blocked:
+            dependent.status = TaskStatus.PENDING
+            dependent.save(update_fields=['status'])
+
 
 def _cascade_status_updates(completed_task):
     """Check dependent tasks and promote them to READY if all deps are met."""
@@ -48,80 +86,62 @@ def _cascade_status_updates(completed_task):
         if not dependent.is_blocked:
             dependent.status = TaskStatus.READY
             dependent.save(update_fields=['status'])
-            # Notify the assignee that their task is now ready
-            _send_task_ready_notification(dependent)
+            # Fire notification rules for the dependent task becoming "ready"
+            _fire_notification_rules(dependent, 'ready')
 
 
-def _send_completion_notifications(task):
-    """Send notifications based on task notification rules."""
+# ---------------------------------------------------------------------------
+# Unified notification dispatch — all notifications are rule-based
+# ---------------------------------------------------------------------------
+
+STATUS_LABELS = {
+    'ready': 'klar',
+    'in_progress': 'i gang',
+    'completed': 'færdig',
+    'skipped': 'sprunget over',
+}
+
+NOTIFICATION_TYPE_MAP = {
+    'ready': 'task_ready',
+    'in_progress': 'task_assigned',
+    'completed': 'task_completed',
+    'skipped': 'task_completed',
+}
+
+
+def _fire_notification_rules(task, trigger_status):
+    """Evaluate all notification rules for this task and send where trigger matches."""
     try:
         from apps.notifications.services import send_notification
-        from apps.notifications.models import NotificationType
     except ImportError:
         return
 
-    for rule in task.notification_rules.select_related('notify_user').all():
-        send_notification(
-            recipient=rule.notify_user,
-            notification_type=NotificationType.TASK_COMPLETED,
-            title=f'Opgave færdig: {task.name}',
-            message=(
-                f'Opgaven "{task.name}" i onboarding for '
-                f'{task.onboarding.new_employee_name} er blevet fuldført.'
-            ),
-            related_onboarding=task.onboarding,
-            related_task=task,
-            send_email=rule.send_email,
-            send_in_app=rule.send_in_app,
-        )
-
-
-def _send_task_ready_notification(task):
-    """Notify the assignee that their task is now ready."""
-    if not task.assignee:
-        return
-
-    try:
-        from apps.notifications.services import send_notification
-        from apps.notifications.models import NotificationType
-    except ImportError:
-        return
-
-    send_notification(
-        recipient=task.assignee,
-        notification_type=NotificationType.TASK_READY,
-        title=f'Opgave klar: {task.name}',
-        message=(
-            f'Opgaven "{task.name}" i onboarding for '
-            f'{task.onboarding.new_employee_name} er nu klar til at blive udført.'
-        ),
-        related_onboarding=task.onboarding,
-        related_task=task,
-        send_email=True,
-        send_in_app=True,
+    rules = task.notification_rules.select_related('notify_user').filter(
+        trigger_status=trigger_status,
     )
 
+    status_label = STATUS_LABELS.get(trigger_status, trigger_status)
+    notification_type = NOTIFICATION_TYPE_MAP.get(trigger_status, 'task_completed')
 
-def _send_onboarding_complete_notification(onboarding):
-    """Notify the creator that the onboarding is complete."""
-    if not onboarding.created_by:
-        return
+    for rule in rules:
+        # Collect recipients: notify_user and/or assignee
+        recipients = set()
+        if rule.notify_user:
+            recipients.add(rule.notify_user)
+        if rule.notify_assignee and task.assignee:
+            recipients.add(task.assignee)
 
-    try:
-        from apps.notifications.services import send_notification
-        from apps.notifications.models import NotificationType
-    except ImportError:
-        return
-
-    send_notification(
-        recipient=onboarding.created_by,
-        notification_type=NotificationType.ONBOARDING_COMPLETED,
-        title=f'Onboarding færdig: {onboarding.new_employee_name}',
-        message=(
-            f'Alle opgaver i onboarding for {onboarding.new_employee_name} '
-            f'er nu fuldført.'
-        ),
-        related_onboarding=onboarding,
-        send_email=True,
-        send_in_app=True,
-    )
+        for recipient in recipients:
+            send_notification(
+                recipient=recipient,
+                notification_type=notification_type,
+                title=f'Opgave {status_label}: {task.name}',
+                message=(
+                    f'Opgaven "{task.name}" i onboarding for '
+                    f'{task.onboarding.new_employee_name} er nu {status_label}.'
+                ),
+                related_onboarding=task.onboarding,
+                related_task=task,
+                send_email=rule.send_email,
+                send_in_app=rule.send_in_app,
+            )

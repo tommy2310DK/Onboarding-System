@@ -216,14 +216,9 @@ class ManageNotificationRulesView(View):
         if form.is_valid():
             rule = form.save(commit=False)
             rule.template_entity = te
-            if TemplateEntityNotificationRule.objects.filter(
-                template_entity=te, notify_user=rule.notify_user
-            ).exists():
-                messages.error(request, 'Denne bruger har allerede en notifikationsregel.')
-            else:
-                rule.save()
-                messages.success(request, 'Notifikationsregel tilføjet.')
-                return redirect('templates_mgmt:notifications', pk=template.pk, te_pk=te.pk)
+            rule.save()
+            messages.success(request, 'Notifikationsregel tilføjet.')
+            return redirect('templates_mgmt:notifications', pk=template.pk, te_pk=te.pk)
 
         rules = te.notification_rules.select_related('notify_user').all()
         return render(request, 'templates_mgmt/template_entity_notifications.html', {

@@ -37,7 +37,9 @@
                         {{ fv.field_definition.name }}
                         {% if fv.field_definition.is_required %}<span class="text-red-500">*</span>{% endif %}
                     </label>
-                    {% if fv.field_definition.field_type == 'checkbox' %}
+                    {% if fv.field_definition.field_type == 'todolist' %}
+                    <p class="text-sm text-gray-500 italic">Todo-listen redigeres på opgavens detaljeside.</p>
+                    {% elif fv.field_definition.field_type == 'checkbox' %}
                     <input type="checkbox" name="field_{{ fv.field_definition.id }}"
                            {% if fv.value_checkbox %}checked{% endif %}
                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">

@@ -41,17 +41,22 @@
                     <div>
                         <label class="text-sm font-medium text-gray-500">Status</label>
                         <div class="mt-1">
-                            {% if task.status == 'completed' %}
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Færdig</span>
-                            {% elif task.status == 'in_progress' %}
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">I gang</span>
-                            {% elif task.status == 'ready' %}
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Klar</span>
-                            {% elif task.status == 'skipped' %}
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Sprunget over</span>
-                            {% else %}
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Afventer</span>
-                            {% endif %}
+                            <form method="post" action="{% url 'onboarding:task_change_status' process.pk task.pk %}" class="flex items-center gap-2">
+                                {% csrf_token %}
+                                <select name="status" onchange="this.form.submit()"
+                                        class="rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm pr-8
+                                        {% if task.status == 'completed' %}bg-green-50 text-green-800
+                                        {% elif task.status == 'in_progress' %}bg-yellow-50 text-yellow-800
+                                        {% elif task.status == 'ready' %}bg-blue-50 text-blue-800
+                                        {% elif task.status == 'skipped' %}bg-gray-100 text-gray-600
+                                        {% else %}bg-gray-50 text-gray-600{% endif %}">
+                                    <option value="pending" {% if task.status == 'pending' %}selected{% endif %}>Afventer</option>
+                                    <option value="ready" {% if task.status == 'ready' %}selected{% endif %}>Klar</option>
+                                    <option value="in_progress" {% if task.status == 'in_progress' %}selected{% endif %}>I gang</option>
+                                    <option value="completed" {% if task.status == 'completed' %}selected{% endif %}>Færdig</option>
+                                    <option value="skipped" {% if task.status == 'skipped' %}selected{% endif %}>Sprunget over</option>
+                                </select>
+                            </form>
                         </div>
                     </div>
                     <div>
@@ -85,6 +90,22 @@
                 <h2 class="text-lg font-semibold text-gray-900 mb-4">Felter</h2>
                 <div class="space-y-3">
                     {% for fv in field_values %}
+                    {% if fv.field_definition.field_type == 'todolist' %}
+                    <div class="py-2 border-b border-gray-100 last:border-0">
+                        <label class="text-sm font-medium text-gray-600 mb-2 block">{{ fv.field_definition.name }}</label>
+                        <div class="todo-list-widget" data-url="{% url 'onboarding:task_todo_toggle' process.pk task.pk fv.pk %}"
+                             data-csrf="{{ csrf_token }}" data-items="{{ fv.value_text|default:'[]' }}">
+                            <div class="todo-items space-y-1"></div>
+                            <div class="mt-2 flex gap-2">
+                                <input type="text" class="todo-new-input flex-1 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                                       placeholder="Tilf&oslash;j punkt...">
+                                <button type="button" class="todo-add-btn bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-indigo-700 transition">
+                                    Tilf&oslash;j
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
                     <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
                         <label class="text-sm font-medium text-gray-600">{{ fv.field_definition.name }}</label>
                         <div class="text-sm text-gray-900">
@@ -101,6 +122,7 @@
                             {% endif %}
                         </div>
                     </div>
+                    {% endif %}
                     {% endfor %}
                 </div>
             </div>
@@ -156,4 +178,101 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    document.querySelectorAll('.todo-list-widget').forEach(function(widget) {
+        var url = widget.dataset.url;
+        var csrf = widget.dataset.csrf;
+        var itemsContainer = widget.querySelector('.todo-items');
+        var newInput = widget.querySelector('.todo-new-input');
+        var addBtn = widget.querySelector('.todo-add-btn');
+        var items = [];
+
+        try {
+            items = JSON.parse(widget.dataset.items || '[]');
+        } catch(e) {
+            items = [];
+        }
+
+        function escapeHtml(text) {
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function render() {
+            var html = '';
+            items.forEach(function(item, idx) {
+                html += '<div class="flex items-center gap-2 group">' +
+                    '<label class="flex items-center gap-2 flex-1 cursor-pointer py-1">' +
+                    '<input type="checkbox" class="todo-checkbox rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"' +
+                    ' data-index="' + idx + '"' + (item.done ? ' checked' : '') + '>' +
+                    '<span class="text-sm ' + (item.done ? 'line-through text-gray-400' : 'text-gray-700') + '">' +
+                    escapeHtml(item.text) + '</span></label>' +
+                    '<button type="button" class="todo-remove-btn opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 text-xs transition" data-index="' + idx + '">' +
+                    '&times;</button></div>';
+            });
+            itemsContainer.innerHTML = html;
+        }
+
+        function sendAction(action, data, callback) {
+            var body = Object.assign({action: action}, data);
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrf,
+                },
+                body: JSON.stringify(body),
+            })
+            .then(function(resp) { return resp.json(); })
+            .then(function(result) {
+                if (result.items) {
+                    items = result.items;
+                    render();
+                }
+                if (callback) callback(result);
+            });
+        }
+
+        // Toggle checkbox
+        itemsContainer.addEventListener('change', function(e) {
+            if (e.target.classList.contains('todo-checkbox')) {
+                sendAction('toggle', {index: parseInt(e.target.dataset.index)});
+            }
+        });
+
+        // Remove item
+        itemsContainer.addEventListener('click', function(e) {
+            if (e.target.classList.contains('todo-remove-btn')) {
+                sendAction('remove', {index: parseInt(e.target.dataset.index)});
+            }
+        });
+
+        // Add item
+        function addItem() {
+            var text = newInput.value.trim();
+            if (text) {
+                sendAction('add', {text: text}, function() {
+                    newInput.value = '';
+                    newInput.focus();
+                });
+            }
+        }
+
+        addBtn.addEventListener('click', addItem);
+        newInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addItem();
+            }
+        });
+
+        render();
+    });
+})();
+</script>
 {% endblock %}

@@ -33,7 +33,29 @@
                 </div>
                 <div>
                     <label for="{{ form.category.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
-                    {{ form.category }}
+                    <div class="flex gap-2 items-start">
+                        <div class="flex-1">
+                            {{ form.category }}
+                        </div>
+                        <button type="button" id="add-category-btn"
+                                class="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition whitespace-nowrap"
+                                title="Opret ny kategori">
+                            + Ny
+                        </button>
+                    </div>
+                    <div id="new-category-form" class="hidden mt-2 flex gap-2 items-center">
+                        <input type="text" id="new-category-name"
+                               class="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                               placeholder="Ny kategori-navn..." maxlength="200">
+                        <button type="button" id="save-category-btn"
+                                class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-indigo-700 transition">
+                            Opret
+                        </button>
+                        <button type="button" id="cancel-category-btn"
+                                class="text-gray-500 hover:text-gray-700 text-xs font-medium">
+                            Annuller
+                        </button>
+                    </div>
                     {% if form.category.errors %}
                     <p class="text-red-600 text-sm mt-1">{{ form.category.errors.0 }}</p>
                     {% endif %}
@@ -60,6 +82,7 @@
                             <th class="pb-2 pr-2 w-1/4">Feltnavn</th>
                             <th class="pb-2 pr-2 w-32">Type</th>
                             <th class="pb-2 pr-2 w-20 text-center">Påkrævet</th>
+                            <th class="pb-2 pr-2 w-20 text-center">Overblik</th>
                             <th class="pb-2 pr-2 w-1/4">Standardværdi</th>
                             <th class="pb-2 pr-2 w-20">Sortering</th>
                             <th class="pb-2 w-20 text-center">Fjern</th>
@@ -75,6 +98,7 @@
                             </td>
                             <td class="pr-2 py-1">{{ field_form.field_type }}</td>
                             <td class="pr-2 py-1 text-center">{{ field_form.is_required }}</td>
+                            <td class="pr-2 py-1 text-center">{{ field_form.show_on_overview }}</td>
                             <td class="pr-2 py-1">{{ field_form.default_value }}</td>
                             <td class="pr-2 py-1">{{ field_form.sort_order }}</td>
                             <td class="py-1 text-center">
@@ -145,6 +169,148 @@
         }
     }
 
+    // Renumber all form inputs so Django formset indices are consecutive (0,1,2...)
+    function renumberForms() {
+        var rows = tbody.querySelectorAll('tr.field-row');
+        var total = rows.length;
+        rows.forEach(function(row, idx) {
+            row.dataset.formIndex = idx;
+            // Update all input/select/textarea names and ids within this row
+            var elements = row.querySelectorAll('input, select, textarea');
+            elements.forEach(function(el) {
+                if (el.name) {
+                    el.name = el.name.replace(/custom_fields-\d+/, 'custom_fields-' + idx);
+                }
+                if (el.id) {
+                    el.id = el.id.replace(/custom_fields-\d+/, 'custom_fields-' + idx);
+                }
+            });
+        });
+        totalFormsInput.value = total;
+    }
+
+    // --- Todo-list default value editor ---
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function buildTodoEditor(cell, hiddenInput) {
+        // Parse existing value: newline-separated items
+        var items = (hiddenInput.value || '').split('\n').filter(function(s) { return s.trim(); });
+
+        var wrapper = document.createElement('div');
+        wrapper.className = 'todo-default-editor';
+
+        function render() {
+            var html = '<div class="space-y-1 todo-default-items">';
+            items.forEach(function(item, idx) {
+                html += '<div class="flex items-center gap-1">' +
+                    '<span class="text-xs text-gray-500 flex-1">' + escapeHtml(item) + '</span>' +
+                    '<button type="button" class="todo-def-remove text-red-400 hover:text-red-600 text-xs" data-idx="' + idx + '">&times;</button>' +
+                    '</div>';
+            });
+            html += '</div>';
+            html += '<div class="flex gap-1 mt-1">' +
+                '<input type="text" class="todo-def-input flex-1 rounded border-gray-300 text-xs py-0.5 px-1 focus:border-indigo-500 focus:ring-indigo-500" placeholder="Tilf\u00f8j punkt...">' +
+                '<button type="button" class="todo-def-add bg-indigo-600 text-white text-xs px-2 py-0.5 rounded hover:bg-indigo-700">+</button>' +
+                '</div>';
+            wrapper.innerHTML = html;
+
+            // Sync hidden input
+            hiddenInput.value = items.join('\n');
+        }
+
+        wrapper.addEventListener('click', function(e) {
+            var removeBtn = e.target.closest('.todo-def-remove');
+            if (removeBtn) {
+                items.splice(parseInt(removeBtn.dataset.idx), 1);
+                render();
+                return;
+            }
+            var addBtn = e.target.closest('.todo-def-add');
+            if (addBtn) {
+                var input = wrapper.querySelector('.todo-def-input');
+                var text = input.value.trim();
+                if (text) {
+                    items.push(text);
+                    render();
+                    wrapper.querySelector('.todo-def-input').focus();
+                }
+            }
+        });
+
+        wrapper.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.target.classList.contains('todo-def-input')) {
+                e.preventDefault();
+                var text = e.target.value.trim();
+                if (text) {
+                    items.push(text);
+                    render();
+                    wrapper.querySelector('.todo-def-input').focus();
+                }
+            }
+        });
+
+        render();
+        return wrapper;
+    }
+
+    function updateDefaultValueCell(row) {
+        var typeSelect = row.querySelector('select[name$="-field_type"]');
+        if (!typeSelect) return;
+
+        var defaultCell = row.querySelector('td:nth-child(5)');
+        if (!defaultCell) return;
+
+        var hiddenInput = defaultCell.querySelector('input[name$="-default_value"]');
+        var existingEditor = defaultCell.querySelector('.todo-default-editor');
+
+        if (typeSelect.value === 'todolist') {
+            // Show todo editor, hide the text input
+            if (!existingEditor) {
+                if (!hiddenInput) {
+                    // Create the hidden input (for new rows)
+                    var prefix = 'custom_fields-' + row.dataset.formIndex;
+                    hiddenInput = document.createElement('input');
+                    hiddenInput.type = 'hidden';
+                    hiddenInput.name = prefix + '-default_value';
+                    hiddenInput.id = 'id_' + prefix + '-default_value';
+                    hiddenInput.value = '';
+                    defaultCell.appendChild(hiddenInput);
+                }
+                hiddenInput.type = 'hidden';
+                var editor = buildTodoEditor(defaultCell, hiddenInput);
+                defaultCell.appendChild(editor);
+            }
+        } else {
+            // Remove todo editor, show text input
+            if (existingEditor) {
+                existingEditor.remove();
+            }
+            if (hiddenInput) {
+                hiddenInput.type = 'text';
+                hiddenInput.className = inputClasses;
+                hiddenInput.placeholder = 'Standardv\u00e6rdi';
+                hiddenInput.maxLength = 500;
+            }
+        }
+    }
+
+    // Listen for field_type changes
+    tbody.addEventListener('change', function(e) {
+        if (e.target.name && e.target.name.endsWith('-field_type')) {
+            var row = e.target.closest('tr.field-row');
+            if (row) updateDefaultValueCell(row);
+        }
+    });
+
+    // Initialize existing todolist rows on page load
+    tbody.querySelectorAll('tr.field-row').forEach(function(row) {
+        updateDefaultValueCell(row);
+    });
+
     // Add new field row
     addBtn.addEventListener('click', function() {
         const idx = parseInt(totalFormsInput.value);
@@ -163,10 +329,15 @@
                     '<option value="text">Tekst</option>' +
                     '<option value="number">Tal</option>' +
                     '<option value="checkbox">Checkbox</option>' +
+                    '<option value="todolist">Todo-liste</option>' +
                 '</select>' +
             '</td>' +
             '<td class="pr-2 py-1 text-center">' +
                 '<input type="checkbox" name="' + prefix + '-is_required" id="id_' + prefix + '-is_required" ' +
+                'class="' + checkboxClasses + '">' +
+            '</td>' +
+            '<td class="pr-2 py-1 text-center">' +
+                '<input type="checkbox" name="' + prefix + '-show_on_overview" id="id_' + prefix + '-show_on_overview" ' +
                 'class="' + checkboxClasses + '">' +
             '</td>' +
             '<td class="pr-2 py-1">' +
@@ -235,11 +406,74 @@
         var removeBtn = e.target.closest('.remove-new-field-btn');
         if (removeBtn) {
             removeBtn.closest('tr').remove();
+            renumberForms();
             updateVisibility();
         }
     });
 
     updateVisibility();
+
+    // --- Inline category creation ---
+    var addCatBtn = document.getElementById('add-category-btn');
+    var newCatForm = document.getElementById('new-category-form');
+    var newCatInput = document.getElementById('new-category-name');
+    var saveCatBtn = document.getElementById('save-category-btn');
+    var cancelCatBtn = document.getElementById('cancel-category-btn');
+    var catSelect = document.getElementById('id_category');
+
+    if (addCatBtn && newCatForm) {
+        addCatBtn.addEventListener('click', function() {
+            newCatForm.classList.remove('hidden');
+            addCatBtn.classList.add('hidden');
+            newCatInput.value = '';
+            newCatInput.focus();
+        });
+
+        cancelCatBtn.addEventListener('click', function() {
+            newCatForm.classList.add('hidden');
+            addCatBtn.classList.remove('hidden');
+        });
+
+        function saveNewCategory() {
+            var name = newCatInput.value.trim();
+            if (!name) return;
+
+            var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            fetch('{% url "entities:category_create_ajax" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: JSON.stringify({name: name}),
+            })
+            .then(function(resp) { return resp.json(); })
+            .then(function(data) {
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+                // Add option to select and choose it
+                var option = document.createElement('option');
+                option.value = data.id;
+                option.textContent = data.name;
+                catSelect.appendChild(option);
+                catSelect.value = data.id;
+
+                // Close inline form
+                newCatForm.classList.add('hidden');
+                addCatBtn.classList.remove('hidden');
+            });
+        }
+
+        saveCatBtn.addEventListener('click', saveNewCategory);
+        newCatInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveNewCategory();
+            }
+        });
+    }
 })();
 </script>
 {% endblock %}
