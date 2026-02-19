@@ -1,313 +1,436 @@
 """
-Comprehensive smoke test for all 4 features:
-1. Bug fix: X button for removing new custom fields
-2. Status change on task detail page
-3. Sorting tasks on onboarding detail page
-4. Todo-list field type
+Comprehensive smoke test for all features.
+Uses Django TestCase which wraps each test in a transaction that is
+rolled back after the test — production data is NEVER touched.
+
+IMPORTANT: TransactionTestCase MUST NOT be used because it flushes the
+entire database after each test. TestCase uses transaction rollback instead.
 """
 import os
 import sys
 import json
-import django
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 sys.path.insert(0, os.path.dirname(__file__))
+
+import django
 django.setup()
 
 from datetime import date, timedelta
-from django.test import RequestFactory, TestCase
+from django.test import TestCase, Client
 from apps.core.models import SystemUser
-from apps.entities.models import Entity, CustomFieldDefinition, FieldType
+from apps.entities.models import Entity, CustomFieldDefinition, FieldType, Category
 from apps.templates_mgmt.models import OnboardingTemplate, TemplateEntity
 from apps.templates_mgmt.services import create_onboarding_from_template
 from apps.onboarding.models import OnboardingProcess, OnboardingTask, OnboardingTaskFieldValue, TaskStatus
 from apps.onboarding.services import change_task_status, complete_task, skip_task, start_task
 
-passed = 0
-failed = 0
+
+class AllFeaturesTest(TestCase):
+    """Each test wrapped in a transaction that rolls back — production data is NEVER affected."""
+
+    def setUp(self):
+        """Create isolated test data — only for this test run."""
+        self.user1 = SystemUser.objects.create(
+            name='Test Bruger X1', email='testx1@test.dk', department='IT'
+        )
+        self.user2 = SystemUser.objects.create(
+            name='Test Bruger X2', email='testx2@test.dk', department='HR'
+        )
+        self.cat = Category.objects.create(name='_Test_Intern')
+        self.entity = Entity.objects.create(
+            name='_Test Entity Med Todo', description='Test', category=self.cat,
+        )
+        self.field_text = CustomFieldDefinition.objects.create(
+            entity=self.entity, name='Notater', field_type=FieldType.TEXT,
+        )
+        self.field_todo = CustomFieldDefinition.objects.create(
+            entity=self.entity, name='Tjekliste', field_type=FieldType.TODOLIST,
+        )
+        self.template = OnboardingTemplate.objects.create(name='_Test Template X')
+        self.te = TemplateEntity.objects.create(
+            template=self.template, entity=self.entity, sort_order=0,
+        )
+        self.process = create_onboarding_from_template(
+            template=self.template,
+            new_employee_name='Test Person X',
+            new_employee_email='tpx@test.dk',
+            new_employee_department='IT',
+            new_employee_position='Developer',
+            start_date=date.today() + timedelta(days=14),
+            created_by=self.user1,
+        )
+        self.task = self.process.tasks.first()
+
+    def _p(self, msg):
+        """Print test result."""
+        print(f"  PASS: {msg}")
+
+    # ------------------------------------------------------------------
+    # Test 1: FieldType.TODOLIST
+    # ------------------------------------------------------------------
+    def test_01_todolist_fieldtype_exists(self):
+        print("\n=== Test 1: FieldType.TODOLIST exists ===")
+        self.assertEqual(FieldType.TODOLIST.value, 'todolist')
+        self._p("TODOLIST choice exists and value is 'todolist'")
+
+    # ------------------------------------------------------------------
+    # Test 2: Entity with todolist field
+    # ------------------------------------------------------------------
+    def test_02_entity_with_todolist_field(self):
+        print("\n=== Test 2: Entity with todolist field ===")
+        self.assertEqual(self.field_text.field_type, 'text')
+        self._p("Text field created")
+        self.assertEqual(self.field_todo.field_type, 'todolist')
+        self._p("Todolist field created")
+
+    # ------------------------------------------------------------------
+    # Test 3: Onboarding from template with todolist
+    # ------------------------------------------------------------------
+    def test_03_onboarding_from_template(self):
+        print("\n=== Test 3: Onboarding from template with todolist ===")
+        self.assertIsNotNone(self.task)
+        self._p("Task created")
+        fvs = self.task.field_values.select_related('field_definition').all()
+        self.assertEqual(fvs.count(), 2)
+        self._p("2 field values created")
+        fv_text = fvs.get(field_definition__field_type='text')
+        fv_todo = fvs.get(field_definition__field_type='todolist')
+        self.assertEqual(fv_text.value_text, '')
+        self._p("Text field value initialized with empty string")
+        self.assertEqual(fv_todo.value_text, '[]')
+        self._p("Todolist field value initialized with '[]'")
+
+    # ------------------------------------------------------------------
+    # Test 4-6: Todo toggle operations
+    # ------------------------------------------------------------------
+    def test_04_todo_add_items(self):
+        print("\n=== Test 4: Todo toggle - add items ===")
+        fv_todo = self.task.field_values.get(field_definition__field_type='todolist')
+        items = json.loads(fv_todo.value_text)
+        self.assertEqual(items, [])
+        self._p("Initial items is empty list")
+
+        items.append({'text': 'Bestil laptop', 'done': False})
+        items.append({'text': 'Opret konto', 'done': False})
+        items.append({'text': 'Opsæt email', 'done': False})
+        fv_todo.value_text = json.dumps(items, ensure_ascii=False)
+        fv_todo.save(update_fields=['value_text'])
+        fv_todo.refresh_from_db()
+        loaded = json.loads(fv_todo.value_text)
+        self.assertEqual(len(loaded), 3)
+        self._p("3 items saved")
+        self.assertEqual(loaded[0]['text'], 'Bestil laptop')
+        self._p("First item text correct")
+        self.assertFalse(loaded[0]['done'])
+        self._p("First item not done")
+
+    def test_05_todo_toggle_item(self):
+        print("\n=== Test 5: Todo toggle - toggle item ===")
+        fv_todo = self.task.field_values.get(field_definition__field_type='todolist')
+        items = [{'text': 'A', 'done': False}, {'text': 'B', 'done': False}]
+        fv_todo.value_text = json.dumps(items)
+        fv_todo.save(update_fields=['value_text'])
+
+        items[0]['done'] = True
+        fv_todo.value_text = json.dumps(items)
+        fv_todo.save(update_fields=['value_text'])
+        fv_todo.refresh_from_db()
+        reloaded = json.loads(fv_todo.value_text)
+        self.assertTrue(reloaded[0]['done'])
+        self._p("First item now done")
+        self.assertFalse(reloaded[1]['done'])
+        self._p("Second item still not done")
+
+    def test_06_todo_remove_item(self):
+        print("\n=== Test 6: Todo toggle - remove item ===")
+        fv_todo = self.task.field_values.get(field_definition__field_type='todolist')
+        items = [{'text': 'Bestil laptop', 'done': True}, {'text': 'Opret konto', 'done': False}, {'text': 'Opsæt email', 'done': False}]
+        fv_todo.value_text = json.dumps(items)
+        fv_todo.save(update_fields=['value_text'])
+
+        items.pop(1)
+        fv_todo.value_text = json.dumps(items)
+        fv_todo.save(update_fields=['value_text'])
+        fv_todo.refresh_from_db()
+        final = json.loads(fv_todo.value_text)
+        self.assertEqual(len(final), 2)
+        self._p("2 items after removal")
+        self.assertEqual([i['text'] for i in final], ['Bestil laptop', 'Opsæt email'])
+        self._p("Remaining items correct")
+
+    # ------------------------------------------------------------------
+    # Test 7: change_task_status service
+    # ------------------------------------------------------------------
+    def test_07_change_task_status(self):
+        print("\n=== Test 7: change_task_status service ===")
+        task = self.task
+        self.assertEqual(task.status, TaskStatus.READY)
+        self._p("Initial status is READY")
+
+        change_task_status(task, TaskStatus.IN_PROGRESS, self.user1)
+        task.refresh_from_db()
+        self.assertEqual(task.status, TaskStatus.IN_PROGRESS)
+        self._p("Status changed to IN_PROGRESS")
+
+        change_task_status(task, TaskStatus.READY, self.user1)
+        task.refresh_from_db()
+        self.assertEqual(task.status, TaskStatus.READY)
+        self._p("Status changed back to READY")
+
+        change_task_status(task, TaskStatus.PENDING, self.user1)
+        task.refresh_from_db()
+        self.assertEqual(task.status, TaskStatus.PENDING)
+        self._p("Status changed to PENDING")
+
+        change_task_status(task, TaskStatus.COMPLETED, self.user1)
+        task.refresh_from_db()
+        self.assertEqual(task.status, TaskStatus.COMPLETED)
+        self._p("Status changed to COMPLETED")
+        self.assertIsNotNone(task.completed_at)
+        self._p("completed_at is set")
+        self.assertEqual(task.completed_by, self.user1)
+        self._p("completed_by is user1")
+
+    # ------------------------------------------------------------------
+    # Test 8: Sorting helpers
+    # ------------------------------------------------------------------
+    def test_08_sorting(self):
+        print("\n=== Test 8: Sorting helpers ===")
+        entity2 = Entity.objects.create(name='_AAA Test Entity', description='First', category=self.cat)
+        entity3 = Entity.objects.create(name='_ZZZ Test Entity', description='Last', category=self.cat)
+
+        template2 = OnboardingTemplate.objects.create(name='_Sort Test Template X')
+        TemplateEntity.objects.create(template=template2, entity=self.entity, sort_order=0, default_assignee=self.user2)
+        TemplateEntity.objects.create(template=template2, entity=entity2, sort_order=1, default_assignee=self.user1)
+        TemplateEntity.objects.create(template=template2, entity=entity3, sort_order=2)
+
+        process2 = create_onboarding_from_template(
+            template=template2,
+            new_employee_name='Sort Test X',
+            new_employee_email='sortx@test.dk',
+            new_employee_department='IT',
+            new_employee_position='Tester',
+            start_date=date.today() + timedelta(days=14),
+            created_by=self.user1,
+        )
+
+        tasks = list(process2.tasks.select_related('assignee').all())
+        self.assertEqual(len(tasks), 3)
+        self._p("3 tasks created")
+
+        sorted_by_name = sorted(tasks, key=lambda t: t.name)
+        self.assertEqual(sorted_by_name[0].name, '_AAA Test Entity')
+        self._p("Name sort: AAA first")
+        self.assertEqual(sorted_by_name[-1].name, '_ZZZ Test Entity')
+        self._p("Name sort: ZZZ last")
+
+        from apps.onboarding.views import OnboardingDetailView
+        STATUS_ORDER = OnboardingDetailView.STATUS_ORDER
+
+        task_a = process2.tasks.get(name='_AAA Test Entity')
+        start_task(task_a)
+        for t in tasks:
+            t.refresh_from_db()
+        sorted_by_status = sorted(tasks, key=lambda t: STATUS_ORDER.get(t.status, 99))
+        self.assertLessEqual(
+            STATUS_ORDER[sorted_by_status[0].status],
+            STATUS_ORDER[sorted_by_status[-1].status],
+        )
+        self._p("Status sort works (ready before in_progress)")
+
+    # ------------------------------------------------------------------
+    # Test 9: TaskTodoToggleView endpoint
+    # ------------------------------------------------------------------
+    def test_09_todo_toggle_view(self):
+        print("\n=== Test 9: TaskTodoToggleView endpoint ===")
+        client = Client()
+        fv_todo = self.task.field_values.get(field_definition__field_type='todolist')
+
+        resp = client.post(
+            f'/onboarding/{self.process.pk}/tasks/{self.task.pk}/todo/{fv_todo.pk}/',
+            data=json.dumps({'action': 'add', 'text': 'Test item'}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self._p("Add todo: status 200")
+        result = resp.json()
+        self.assertEqual(len(result['items']), 1)
+        self._p("Add todo: 1 item")
+        self.assertEqual(result['items'][0]['text'], 'Test item')
+        self._p("Add todo: correct text")
+
+        resp = client.post(
+            f'/onboarding/{self.process.pk}/tasks/{self.task.pk}/todo/{fv_todo.pk}/',
+            data=json.dumps({'action': 'toggle', 'index': 0}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self._p("Toggle todo: status 200")
+        result = resp.json()
+        self.assertTrue(result['items'][0]['done'])
+        self._p("Toggle todo: item done")
+
+        resp = client.post(
+            f'/onboarding/{self.process.pk}/tasks/{self.task.pk}/todo/{fv_todo.pk}/',
+            data=json.dumps({'action': 'toggle', 'index': 0}),
+            content_type='application/json',
+        )
+        result = resp.json()
+        self.assertFalse(result['items'][0]['done'])
+        self._p("Toggle back: item not done")
+
+        resp = client.post(
+            f'/onboarding/{self.process.pk}/tasks/{self.task.pk}/todo/{fv_todo.pk}/',
+            data=json.dumps({'action': 'add', 'text': 'Second item'}),
+            content_type='application/json',
+        )
+        result = resp.json()
+        self.assertEqual(len(result['items']), 2)
+        self._p("Add second: 2 items")
+
+        resp = client.post(
+            f'/onboarding/{self.process.pk}/tasks/{self.task.pk}/todo/{fv_todo.pk}/',
+            data=json.dumps({'action': 'remove', 'index': 0}),
+            content_type='application/json',
+        )
+        result = resp.json()
+        self.assertEqual(len(result['items']), 1)
+        self._p("Remove: 1 item remaining")
+        self.assertEqual(result['items'][0]['text'], 'Second item')
+        self._p("Remove: correct item remains")
+
+    # ------------------------------------------------------------------
+    # Test 10: View endpoints respond
+    # ------------------------------------------------------------------
+    def test_10_view_endpoints(self):
+        print("\n=== Test 10: View endpoints respond ===")
+        client = Client()
+
+        resp = client.get(f'/onboarding/{self.process.pk}/tasks/{self.task.pk}/')
+        self.assertEqual(resp.status_code, 200)
+        self._p("Task detail page loads")
+        self.assertIn(b'todo-list-widget', resp.content)
+        self._p("Task detail has todo widget")
+        self.assertIn(b'change-status', resp.content)
+        self._p("Task detail has status dropdown")
+
+        # Sorting needs a process with >1 task
+        entity2 = Entity.objects.create(name='_View Test E2', description='', category=self.cat)
+        template2 = OnboardingTemplate.objects.create(name='_View Sort Tmpl X')
+        TemplateEntity.objects.create(template=template2, entity=self.entity, sort_order=0)
+        TemplateEntity.objects.create(template=template2, entity=entity2, sort_order=1)
+        p2 = create_onboarding_from_template(
+            template=template2,
+            new_employee_name='View Test X',
+            new_employee_email='viewx@test.dk',
+            new_employee_department='IT',
+            new_employee_position='Tester',
+            start_date=date.today() + timedelta(days=14),
+            created_by=self.user1,
+        )
+
+        resp = client.get(f'/onboarding/{p2.pk}/?sort=name&dir=asc')
+        self.assertEqual(resp.status_code, 200)
+        self._p("Onboarding detail with sort loads")
+
+        resp = client.get(f'/onboarding/{p2.pk}/?sort=status&dir=desc')
+        self.assertEqual(resp.status_code, 200)
+        self._p("Onboarding detail with status sort loads")
+
+        resp = client.get(f'/onboarding/{p2.pk}/?sort=deadline&dir=asc')
+        self.assertEqual(resp.status_code, 200)
+        self._p("Onboarding detail with deadline sort loads")
+
+        resp = client.post(
+            f'/onboarding/{self.process.pk}/tasks/{self.task.pk}/change-status/',
+            data={'status': 'in_progress'},
+        )
+        self.assertEqual(resp.status_code, 302)
+        self._p("Status change redirects")
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.status, TaskStatus.IN_PROGRESS)
+        self._p("Status changed to in_progress")
+
+        resp = client.get(f'/onboarding/{self.process.pk}/tasks/{self.task.pk}/edit/')
+        self.assertEqual(resp.status_code, 200)
+        self._p("Task edit page loads")
+        self.assertIn('Todo-listen redigeres', resp.content.decode())
+        self._p("Edit page shows todolist notice")
+
+    # ------------------------------------------------------------------
+    # Test 11: notify_dependent_assignees
+    # ------------------------------------------------------------------
+    def test_11_notify_dependent_assignees(self):
+        print("\n=== Test 11: notify_dependent_assignees ===")
+        from apps.onboarding.models import TaskNotificationRule
+        from apps.notifications.models import Notification
+
+        e1 = Entity.objects.create(name='_Test Dep E1', description='', category=self.cat)
+        e2 = Entity.objects.create(name='_Test Dep E2', description='', category=self.cat)
+        tmpl = OnboardingTemplate.objects.create(name='_Test Dep Tmpl X')
+        te1 = TemplateEntity.objects.create(tmpl, entity=e1, sort_order=0, default_assignee=self.user1) if False else \
+              TemplateEntity.objects.create(template=tmpl, entity=e1, sort_order=0, default_assignee=self.user1)
+        te2 = TemplateEntity.objects.create(template=tmpl, entity=e2, sort_order=1, default_assignee=self.user2)
+        te2.dependencies.add(te1)
+
+        from apps.templates_mgmt.models import TemplateEntityNotificationRule
+        TemplateEntityNotificationRule.objects.create(
+            template_entity=te1,
+            notify_dependent_assignees=True,
+            trigger_status='completed',
+            send_email=True,
+            send_in_app=True,
+        )
+
+        notif_before = Notification.objects.filter(recipient=self.user2).count()
+
+        proc = create_onboarding_from_template(
+            template=tmpl,
+            new_employee_name='Dep Test X',
+            new_employee_email='depx@test.dk',
+            new_employee_department='IT',
+            new_employee_position='Dev',
+            start_date=date.today() + timedelta(days=30),
+            created_by=self.user1,
+        )
+        tasks = list(proc.tasks.order_by('sort_order'))
+        task1, task2 = tasks[0], tasks[1]
+
+        self.assertEqual(task1.status, TaskStatus.READY)
+        self.assertEqual(task2.status, TaskStatus.PENDING)
+        self._p("Initial statuses correct")
+
+        complete_task(task1, self.user1)
+        task2.refresh_from_db()
+        self.assertEqual(task2.status, TaskStatus.READY)
+        self._p("Task2 promoted to READY")
+
+        notif_after = Notification.objects.filter(recipient=self.user2).count()
+        self.assertGreaterEqual(notif_after - notif_before, 1)
+        self._p("Dependent assignee received notification")
+
+        latest = Notification.objects.filter(recipient=self.user2).order_by('-created_at').first()
+        self.assertIn('afhængige opgaver', latest.message.lower())
+        self._p("Notification contains dependent task links")
+        self.assertIn('href=', latest.message)
+        self._p("Notification message has HTML links")
 
 
-def assert_eq(a, b):
-    if a != b:
-        raise AssertionError(f"Expected {b!r}, got {a!r}")
+if __name__ == '__main__':
+    import unittest
+    # Run with verbosity to see individual test output
+    loader = unittest.TestLoader()
+    loader.sortTestMethodsUsing = lambda x, y: (x > y) - (x < y)
+    suite = loader.loadTestsFromTestCase(AllFeaturesTest)
+    runner = unittest.TextTestRunner(verbosity=0)
+    result = runner.run(suite)
 
-
-def assert_true(val):
-    if not val:
-        raise AssertionError(f"Expected truthy, got {val!r}")
-
-
-def test(name, fn):
-    global passed, failed
-    try:
-        fn()
-        print(f"  PASS: {name}")
-        passed += 1
-    except Exception as e:
-        print(f"  FAIL: {name} -> {e}")
-        failed += 1
-
-# Cleanup
-OnboardingProcess.objects.all().delete()
-OnboardingTemplate.objects.all().delete()
-Entity.objects.all().delete()
-SystemUser.objects.filter(email__in=['test@test.dk', 'test2@test.dk']).delete()
-
-# Setup
-user1 = SystemUser.objects.create(name='Test Bruger', email='test@test.dk', department='IT')
-user2 = SystemUser.objects.create(name='Test Bruger 2', email='test2@test.dk', department='HR')
-
-print("\n=== Test 1: FieldType.TODOLIST exists ===")
-test("TODOLIST choice exists", lambda: FieldType.TODOLIST)
-test("TODOLIST value is 'todolist'", lambda: assert_eq(FieldType.TODOLIST.value, 'todolist'))
-
-print("\n=== Test 2: Entity with todolist field ===")
-entity = Entity.objects.create(name='Test Entity Med Todo', description='Test')
-field_text = CustomFieldDefinition.objects.create(entity=entity, name='Notater', field_type=FieldType.TEXT)
-field_todo = CustomFieldDefinition.objects.create(entity=entity, name='Tjekliste', field_type=FieldType.TODOLIST)
-
-test("Text field created", lambda: assert_eq(field_text.field_type, 'text'))
-test("Todolist field created", lambda: assert_eq(field_todo.field_type, 'todolist'))
-
-print("\n=== Test 3: Onboarding from template with todolist ===")
-template = OnboardingTemplate.objects.create(name='Test Template')
-te = TemplateEntity.objects.create(template=template, entity=entity, sort_order=0)
-
-process = create_onboarding_from_template(
-    template=template,
-    new_employee_name='Test Person',
-    new_employee_email='tp@test.dk',
-    new_employee_department='IT',
-    new_employee_position='Developer',
-    start_date=date.today() + timedelta(days=14),
-    created_by=user1,
-)
-
-task = process.tasks.first()
-fvs = task.field_values.select_related('field_definition').all()
-
-test("Task created", lambda: assert_true(task is not None))
-test("2 field values created", lambda: assert_eq(fvs.count(), 2))
-
-fv_text = fvs.get(field_definition__field_type='text')
-fv_todo = fvs.get(field_definition__field_type='todolist')
-
-test("Text field value initialized with empty string", lambda: assert_eq(fv_text.value_text, ''))
-test("Todolist field value initialized with '[]'", lambda: assert_eq(fv_todo.value_text, '[]'))
-
-print("\n=== Test 4: Todo toggle - add items ===")
-items = json.loads(fv_todo.value_text)
-test("Initial items is empty list", lambda: assert_eq(items, []))
-
-# Simulate adding items
-items.append({'text': 'Bestil laptop', 'done': False})
-items.append({'text': 'Opret konto', 'done': False})
-items.append({'text': 'Opsæt email', 'done': False})
-fv_todo.value_text = json.dumps(items, ensure_ascii=False)
-fv_todo.save(update_fields=['value_text'])
-
-fv_todo.refresh_from_db()
-loaded = json.loads(fv_todo.value_text)
-test("3 items saved", lambda: assert_eq(len(loaded), 3))
-test("First item text correct", lambda: assert_eq(loaded[0]['text'], 'Bestil laptop'))
-test("First item not done", lambda: assert_eq(loaded[0]['done'], False))
-
-print("\n=== Test 5: Todo toggle - toggle item ===")
-loaded[0]['done'] = True
-fv_todo.value_text = json.dumps(loaded, ensure_ascii=False)
-fv_todo.save(update_fields=['value_text'])
-
-fv_todo.refresh_from_db()
-reloaded = json.loads(fv_todo.value_text)
-test("First item now done", lambda: assert_eq(reloaded[0]['done'], True))
-test("Second item still not done", lambda: assert_eq(reloaded[1]['done'], False))
-
-print("\n=== Test 6: Todo toggle - remove item ===")
-reloaded.pop(1)  # Remove 'Opret konto'
-fv_todo.value_text = json.dumps(reloaded, ensure_ascii=False)
-fv_todo.save(update_fields=['value_text'])
-
-fv_todo.refresh_from_db()
-final = json.loads(fv_todo.value_text)
-test("2 items after removal", lambda: assert_eq(len(final), 2))
-test("Remaining items correct", lambda: assert_eq([i['text'] for i in final], ['Bestil laptop', 'Opsæt email']))
-
-print("\n=== Test 7: change_task_status service ===")
-# Task starts as READY (no dependencies)
-test("Initial status is READY", lambda: assert_eq(task.status, TaskStatus.READY))
-
-change_task_status(task, TaskStatus.IN_PROGRESS, user1)
-task.refresh_from_db()
-test("Status changed to IN_PROGRESS", lambda: assert_eq(task.status, TaskStatus.IN_PROGRESS))
-
-change_task_status(task, TaskStatus.READY, user1)
-task.refresh_from_db()
-test("Status changed back to READY", lambda: assert_eq(task.status, TaskStatus.READY))
-
-change_task_status(task, TaskStatus.PENDING, user1)
-task.refresh_from_db()
-test("Status changed to PENDING", lambda: assert_eq(task.status, TaskStatus.PENDING))
-
-change_task_status(task, TaskStatus.COMPLETED, user1)
-task.refresh_from_db()
-test("Status changed to COMPLETED", lambda: assert_eq(task.status, TaskStatus.COMPLETED))
-test("completed_at is set", lambda: assert_true(task.completed_at is not None))
-test("completed_by is user1", lambda: assert_eq(task.completed_by, user1))
-
-print("\n=== Test 8: Sorting helpers ===")
-# Create a template with multiple entities to test sorting
-entity2 = Entity.objects.create(name='AAA Entity', description='First alphabetically')
-entity3 = Entity.objects.create(name='ZZZ Entity', description='Last alphabetically')
-
-template2 = OnboardingTemplate.objects.create(name='Sort Test Template')
-te2a = TemplateEntity.objects.create(template=template2, entity=entity, sort_order=0, default_assignee=user2)
-te2b = TemplateEntity.objects.create(template=template2, entity=entity2, sort_order=1, default_assignee=user1)
-te2c = TemplateEntity.objects.create(template=template2, entity=entity3, sort_order=2)
-
-process2 = create_onboarding_from_template(
-    template=template2,
-    new_employee_name='Sort Test',
-    new_employee_email='sort@test.dk',
-    new_employee_department='IT',
-    new_employee_position='Tester',
-    start_date=date.today() + timedelta(days=14),
-    created_by=user1,
-)
-
-tasks = list(process2.tasks.select_related('assignee').all())
-test("3 tasks created", lambda: assert_eq(len(tasks), 3))
-
-# Test name sorting
-sorted_by_name = sorted(tasks, key=lambda t: t.name)
-test("Name sort: AAA first", lambda: assert_eq(sorted_by_name[0].name, 'AAA Entity'))
-test("Name sort: ZZZ last", lambda: assert_eq(sorted_by_name[-1].name, 'ZZZ Entity'))
-
-# Test status sorting
-from apps.onboarding.views import OnboardingDetailView
-STATUS_ORDER = OnboardingDetailView.STATUS_ORDER
-
-# Change one task to in_progress
-task_a = process2.tasks.get(name='AAA Entity')
-start_task(task_a)
-task_a.refresh_from_db()
-
-sorted_by_status = sorted(tasks, key=lambda t: STATUS_ORDER.get(t.status, 99))
-# All should be READY except task_a which is IN_PROGRESS - but we need to refresh
-for t in tasks:
-    t.refresh_from_db()
-sorted_by_status = sorted(tasks, key=lambda t: STATUS_ORDER.get(t.status, 99))
-test("Status sort works (ready before in_progress)", lambda: assert_true(
-    STATUS_ORDER[sorted_by_status[0].status] <= STATUS_ORDER[sorted_by_status[-1].status]
-))
-
-print("\n=== Test 9: TaskTodoToggleView endpoint ===")
-from django.test import Client
-client = Client()
-
-# Create a fresh process with a todolist field
-process3 = create_onboarding_from_template(
-    template=template,
-    new_employee_name='Ajax Test',
-    new_employee_email='ajax@test.dk',
-    new_employee_department='IT',
-    new_employee_position='Dev',
-    start_date=date.today() + timedelta(days=7),
-    created_by=user1,
-)
-task3 = process3.tasks.first()
-fv_todo3 = task3.field_values.get(field_definition__field_type='todolist')
-
-# Test add
-resp = client.post(
-    f'/onboarding/{process3.pk}/tasks/{task3.pk}/todo/{fv_todo3.pk}/',
-    data=json.dumps({'action': 'add', 'text': 'Test item'}),
-    content_type='application/json',
-)
-test("Add todo: status 200", lambda: assert_eq(resp.status_code, 200))
-result = resp.json()
-test("Add todo: 1 item", lambda: assert_eq(len(result['items']), 1))
-test("Add todo: correct text", lambda: assert_eq(result['items'][0]['text'], 'Test item'))
-
-# Test toggle
-resp = client.post(
-    f'/onboarding/{process3.pk}/tasks/{task3.pk}/todo/{fv_todo3.pk}/',
-    data=json.dumps({'action': 'toggle', 'index': 0}),
-    content_type='application/json',
-)
-test("Toggle todo: status 200", lambda: assert_eq(resp.status_code, 200))
-result = resp.json()
-test("Toggle todo: item done", lambda: assert_eq(result['items'][0]['done'], True))
-
-# Test toggle back
-resp = client.post(
-    f'/onboarding/{process3.pk}/tasks/{task3.pk}/todo/{fv_todo3.pk}/',
-    data=json.dumps({'action': 'toggle', 'index': 0}),
-    content_type='application/json',
-)
-result = resp.json()
-test("Toggle back: item not done", lambda: assert_eq(result['items'][0]['done'], False))
-
-# Add second item
-resp = client.post(
-    f'/onboarding/{process3.pk}/tasks/{task3.pk}/todo/{fv_todo3.pk}/',
-    data=json.dumps({'action': 'add', 'text': 'Second item'}),
-    content_type='application/json',
-)
-result = resp.json()
-test("Add second: 2 items", lambda: assert_eq(len(result['items']), 2))
-
-# Test remove
-resp = client.post(
-    f'/onboarding/{process3.pk}/tasks/{task3.pk}/todo/{fv_todo3.pk}/',
-    data=json.dumps({'action': 'remove', 'index': 0}),
-    content_type='application/json',
-)
-result = resp.json()
-test("Remove: 1 item remaining", lambda: assert_eq(len(result['items']), 1))
-test("Remove: correct item remains", lambda: assert_eq(result['items'][0]['text'], 'Second item'))
-
-print("\n=== Test 10: View endpoints respond ===")
-# Test task detail page loads
-resp = client.get(f'/onboarding/{process3.pk}/tasks/{task3.pk}/')
-test("Task detail page loads", lambda: assert_eq(resp.status_code, 200))
-test("Task detail has todo widget", lambda: assert_true(b'todo-list-widget' in resp.content))
-test("Task detail has status dropdown", lambda: assert_true(b'change-status' in resp.content))
-
-# Test onboarding detail with sorting
-resp = client.get(f'/onboarding/{process2.pk}/?sort=name&dir=asc')
-test("Onboarding detail with sort loads", lambda: assert_eq(resp.status_code, 200))
-
-resp = client.get(f'/onboarding/{process2.pk}/?sort=status&dir=desc')
-test("Onboarding detail with status sort loads", lambda: assert_eq(resp.status_code, 200))
-
-resp = client.get(f'/onboarding/{process2.pk}/?sort=deadline&dir=asc')
-test("Onboarding detail with deadline sort loads", lambda: assert_eq(resp.status_code, 200))
-
-# Test status change via POST
-resp = client.post(
-    f'/onboarding/{process3.pk}/tasks/{task3.pk}/change-status/',
-    data={'status': 'in_progress'},
-)
-test("Status change redirects", lambda: assert_eq(resp.status_code, 302))
-task3.refresh_from_db()
-test("Status changed to in_progress", lambda: assert_eq(task3.status, TaskStatus.IN_PROGRESS))
-
-# Test task edit page loads and skips todolist
-resp = client.get(f'/onboarding/{process3.pk}/tasks/{task3.pk}/edit/')
-test("Task edit page loads", lambda: assert_eq(resp.status_code, 200))
-test("Edit page shows todolist notice", lambda: assert_true('Todo-listen redigeres' in resp.content.decode()))
-
-
-# Cleanup
-OnboardingProcess.objects.filter(pk__in=[process.pk, process2.pk, process3.pk]).delete()
-OnboardingTemplate.objects.filter(pk__in=[template.pk, template2.pk]).delete()
-Entity.objects.filter(pk__in=[entity.pk, entity2.pk, entity3.pk]).delete()
-SystemUser.objects.filter(pk__in=[user1.pk, user2.pk]).delete()
-
-print(f"\n{'='*50}")
-print(f"Results: {passed} passed, {failed} failed out of {passed + failed}")
-if failed > 0:
-    sys.exit(1)
-else:
-    print("All tests passed!")
-    sys.exit(0)
+    total = result.testsRun
+    failures = len(result.failures) + len(result.errors)
+    passed = total - failures
+    print(f"\n{'='*50}")
+    print(f"Results: {passed} passed, {failures} failed out of {total}")
+    if failures == 0:
+        print("All tests passed!")
+    sys.exit(0 if failures == 0 else 1)

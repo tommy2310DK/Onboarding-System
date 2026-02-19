@@ -112,6 +112,14 @@ class AddEntityToTemplateView(View):
             te = form.save(commit=False)
             te.template = template
             te.save()
+            # Create default notification rule: notify dependent assignees on completion
+            TemplateEntityNotificationRule.objects.create(
+                template_entity=te,
+                notify_dependent_assignees=True,
+                trigger_status='completed',
+                send_email=True,
+                send_in_app=True,
+            )
             messages.success(request, f'Enheden "{te.entity.name}" er tilføjet til skabelonen.')
             return redirect('templates_mgmt:detail', pk=template.pk)
         return render(request, 'templates_mgmt/template_entity_add.html', {

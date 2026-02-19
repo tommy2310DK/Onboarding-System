@@ -24,11 +24,25 @@ class NotificationListView(View):
             return render(request, 'notifications/notification_list.html', {
                 'notifications': [],
             })
+
+        # Sorting: default newest first, allow ?sort=oldest
+        sort = request.GET.get('sort', 'newest')
+        if sort == 'oldest':
+            ordering = 'created_at'
+        else:
+            ordering = '-created_at'
+            sort = 'newest'
+
         notifications = Notification.objects.filter(recipient=user).select_related(
             'related_onboarding', 'related_task'
-        )[:50]
+        ).order_by(ordering)[:50]
+
+        has_read = Notification.objects.filter(recipient=user, is_read=True).exists()
+
         return render(request, 'notifications/notification_list.html', {
             'notifications': notifications,
+            'current_sort': sort,
+            'has_read': has_read,
         })
 
 
@@ -64,4 +78,20 @@ class MarkAllReadView(View):
         user = _get_current_user(request)
         if user:
             Notification.objects.filter(recipient=user, is_read=False).update(is_read=True)
+        return redirect('notifications:list')
+
+
+class DeleteNotificationView(View):
+    def post(self, request, pk):
+        user = _get_current_user(request)
+        if user:
+            Notification.objects.filter(pk=pk, recipient=user).delete()
+        return redirect('notifications:list')
+
+
+class DeleteAllReadView(View):
+    def post(self, request):
+        user = _get_current_user(request)
+        if user:
+            Notification.objects.filter(recipient=user, is_read=True).delete()
         return redirect('notifications:list')

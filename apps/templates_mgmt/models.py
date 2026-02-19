@@ -76,6 +76,11 @@ class TemplateEntityNotificationRule(models.Model):
         verbose_name='Notificer ansvarlig',
         help_text='Send notifikation til den ansvarlige for opgaven',
     )
+    notify_dependent_assignees = models.BooleanField(
+        default=False,
+        verbose_name='Notificer afhængige ansvarlige',
+        help_text='Send notifikation til ansvarlige for opgaver der er direkte afhængige af denne',
+    )
     trigger_status = models.CharField(
         max_length=20,
         choices=TriggerStatus.choices,
@@ -91,5 +96,12 @@ class TemplateEntityNotificationRule(models.Model):
         verbose_name_plural = 'Notifikationsregler'
 
     def __str__(self):
-        target = self.notify_user or 'Ansvarlig'
-        return f"Notificer {target} når {self.template_entity} bliver {self.get_trigger_status_display()}"
+        targets = []
+        if self.notify_user:
+            targets.append(str(self.notify_user))
+        if self.notify_assignee:
+            targets.append('Ansvarlig')
+        if self.notify_dependent_assignees:
+            targets.append('Afh. ansvarlige')
+        target = ', '.join(targets) or 'Ingen'
+        return f"Notificer {target} ved {self.get_trigger_status_display()}"

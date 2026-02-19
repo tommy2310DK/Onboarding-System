@@ -115,6 +115,7 @@ def _fire_notification_rules(task, trigger_status):
         from apps.notifications.services import send_notification
     except ImportError:
         return
+    from django.urls import reverse
 
     rules = task.notification_rules.select_related('notify_user').filter(
         trigger_status=trigger_status,
@@ -122,26 +123,67 @@ def _fire_notification_rules(task, trigger_status):
 
     status_label = STATUS_LABELS.get(trigger_status, trigger_status)
     notification_type = NOTIFICATION_TYPE_MAP.get(trigger_status, 'task_completed')
+    base_message = (
+        f'Opgaven "{task.name}" i onboarding for '
+        f'{task.onboarding.new_employee_name} er nu {status_label}.'
+    )
 
     for rule in rules:
-        # Collect recipients: notify_user and/or assignee
-        recipients = set()
+        # Collect direct recipients (notify_user and/or assignee)
+        direct_recipients = set()
         if rule.notify_user:
-            recipients.add(rule.notify_user)
+            direct_recipients.add(rule.notify_user)
         if rule.notify_assignee and task.assignee:
-            recipients.add(task.assignee)
+            direct_recipients.add(task.assignee)
 
-        for recipient in recipients:
+        # Send to direct recipients (standard message)
+        for recipient in direct_recipients:
             send_notification(
                 recipient=recipient,
                 notification_type=notification_type,
                 title=f'Opgave {status_label}: {task.name}',
-                message=(
-                    f'Opgaven "{task.name}" i onboarding for '
-                    f'{task.onboarding.new_employee_name} er nu {status_label}.'
-                ),
+                message=base_message,
                 related_onboarding=task.onboarding,
                 related_task=task,
                 send_email=rule.send_email,
                 send_in_app=rule.send_in_app,
             )
+
+        # Send to dependent task assignees with links to their tasks
+        if rule.notify_dependent_assignees:
+            dep_tasks = list(
+                task.dependents.select_related('assignee').all()
+            )
+            # Group dependent tasks by assignee
+            assignee_tasks = {}
+            for dep_task in dep_tasks:
+                if dep_task.assignee:
+                    assignee_tasks.setdefault(dep_task.assignee, []).append(dep_task)
+
+            for recipient, their_tasks in assignee_tasks.items():
+                if recipient in direct_recipients:
+                    # Already notified as direct recipient — skip duplicate
+                    continue
+                # Build message with links to dependent tasks
+                task_links = []
+                for dt in their_tasks:
+                    url = reverse('onboarding:task_detail', args=[dt.onboarding_id, dt.pk])
+                    task_links.append(
+                        f'<a href="{url}" class="text-indigo-600 hover:text-indigo-900 '
+                        f'underline">{dt.name}</a>'
+                    )
+                links_html = ', '.join(task_links)
+                dep_message = (
+                    f'{base_message}<br>'
+                    f'Dine afhængige opgaver: {links_html}'
+                )
+                send_notification(
+                    recipient=recipient,
+                    notification_type=notification_type,
+                    title=f'Opgave {status_label}: {task.name}',
+                    message=dep_message,
+                    related_onboarding=task.onboarding,
+                    related_task=task,
+                    send_email=rule.send_email,
+                    send_in_app=rule.send_in_app,
+                )

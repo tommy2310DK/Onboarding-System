@@ -169,6 +169,9 @@ class TaskNotificationRule(models.Model):
         null=True, blank=True,
     )
     notify_assignee = models.BooleanField(default=False, verbose_name='Notificer ansvarlig')
+    notify_dependent_assignees = models.BooleanField(
+        default=False, verbose_name='Notificer afhængige ansvarlige',
+    )
     trigger_status = models.CharField(
         max_length=20,
         choices=[

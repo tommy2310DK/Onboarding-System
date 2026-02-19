@@ -85,9 +85,12 @@ class NotificationRuleForm(forms.ModelForm):
 
     class Meta:
         model = TemplateEntityNotificationRule
-        fields = ['notify_assignee', 'notify_user', 'trigger_status', 'send_email', 'send_in_app']
+        fields = ['notify_assignee', 'notify_dependent_assignees', 'notify_user', 'trigger_status', 'send_email', 'send_in_app']
         widgets = {
             'notify_assignee': forms.CheckboxInput(attrs={
+                'class': 'rounded border-gray-300 text-indigo-600 focus:ring-indigo-500',
+            }),
+            'notify_dependent_assignees': forms.CheckboxInput(attrs={
                 'class': 'rounded border-gray-300 text-indigo-600 focus:ring-indigo-500',
             }),
             'notify_user': forms.Select(attrs={'class': WIDGET_CLASSES}),
@@ -110,6 +113,9 @@ class NotificationRuleForm(forms.ModelForm):
         cleaned = super().clean()
         notify_user = cleaned.get('notify_user')
         notify_assignee = cleaned.get('notify_assignee')
-        if not notify_user and not notify_assignee:
-            raise forms.ValidationError('Vælg enten en specifik bruger eller marker "Notificer ansvarlig".')
+        notify_dependent_assignees = cleaned.get('notify_dependent_assignees')
+        if not notify_user and not notify_assignee and not notify_dependent_assignees:
+            raise forms.ValidationError(
+                'Vælg mindst én modtager: en specifik bruger, ansvarlig, eller afhængige ansvarlige.'
+            )
         return cleaned
